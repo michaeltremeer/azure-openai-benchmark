@@ -7,3 +7,7 @@ wonderwords
 asyncio
 aiohttp
 pandas
+kaleido
+scikit-learn
+statsmodels
+plotly
