@@ -70,6 +70,19 @@ class _StatsAggregator(threading.Thread):
 
       super(_StatsAggregator, self).__init__(*args, **kwargs)
 
+   def _samples_to_dict(self):
+      return {
+         "request_timestamps": self.request_timestamps._values(),
+         "request_latency": self.request_latency._values(),
+         "call_tries": self.call_tries._values(),
+         "response_latencies": self.response_latencies._values(),
+         "first_token_latencies": self.first_token_latencies._values(),
+         "token_latencies": self.token_latencies._values(),
+         "context_tokens": self.context_tokens._values(),
+         "generated_tokens": self.generated_tokens._values(),
+         "utilizations": self.utilizations._values(),
+      }
+
    def run(self):
       """
       Start the periodic aggregator. Use stop() to stop.
@@ -84,6 +97,8 @@ class _StatsAggregator(threading.Thread):
       self.terminate.set()
       # Dump one more time to ensure we include the final request
       self._dump()
+      samples = self._samples_to_dict()
+      print(json.dumps(samples), flush=True)
 
    def record_new_request(self):
       """
