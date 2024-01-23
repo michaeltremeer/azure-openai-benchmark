@@ -4,3 +4,4 @@ __pycache__
 logs
 .vscode
 contrib/prepare_custom_messages/messages_data/*
+analysis_outputs/*
