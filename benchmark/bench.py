@@ -5,6 +5,7 @@ import argparse
 import logging
 import os
 from datetime import datetime
+from dotenv import load_dotenv
 
 from .loadcmd import load
 from .tokenizecmd import tokenize
@@ -22,6 +23,8 @@ def str2bool(v):
     
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+
+    load_dotenv()
 
     parser = argparse.ArgumentParser(description="Benchmarking tool for Azure OpenAI Provisioned Throughput Units (PTUs).")
     sub_parsers = parser.add_subparsers()
