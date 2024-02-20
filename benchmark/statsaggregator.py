@@ -69,9 +69,10 @@ class _StatsAggregator(threading.Thread):
       self.window_duration = window_duration
 
       super(_StatsAggregator, self).__init__(*args, **kwargs)
-
-   def _samples_to_dict(self):
-      return {
+   
+   def dump_raw_call_stats(self):
+      """Dumps raw stats for each individual call within the aggregation window"""
+      samples = {
          "request_timestamps": self.request_timestamps._values(),
          "request_latency": self.request_latency._values(),
          "call_tries": self.call_tries._values(),
@@ -82,6 +83,7 @@ class _StatsAggregator(threading.Thread):
          "generated_tokens": self.generated_tokens._values(),
          "utilizations": self.utilizations._values(),
       }
+      print("All data samples: ", json.dumps(samples), flush=True)
 
    def run(self):
       """
@@ -94,8 +96,6 @@ class _StatsAggregator(threading.Thread):
          self._slide_window()
 
    def stop(self):
-      samples = self._samples_to_dict()
-      print("All data samples: ", json.dumps(samples), flush=True)
       self.terminate.set()
       # Dump one more time to ensure we include the final request
       self._dump()

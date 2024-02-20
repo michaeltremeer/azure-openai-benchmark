@@ -17,18 +17,20 @@ class AsyncHTTPExecuter:
     An implementation of an async HTTP executer class with rate limiting and
     concurrency control.
     """
-    def __init__(self, async_http_func: Callable[[aiohttp.ClientSession], None], rate_limiter=NoRateLimiter(), max_concurrency=12):
+    def __init__(self, async_http_func: Callable[[aiohttp.ClientSession], None], rate_limiter=NoRateLimiter(), max_concurrency=12, finish_run_func=None):
         """
         Creates a new executer.
         :param async_http_func: A callable function that takes aiohttp.ClientSession to use to perform request.
         :param rate_limiter: Rate limiter object to use, defaults to NoRateLimiter.
         :param max_concurrency: Maximum number of concurrent requests, defaults to 12.
+        :param finish_run_func: Function to run when run reaches end.
         """
         self.async_http_func = async_http_func
         self.rate_limiter = rate_limiter
         self.max_concurrency = max_concurrency
         self.max_lag_warn = timedelta(seconds=5).seconds
         self.terminate = False
+        self.finish_run_func = finish_run_func
 
     def run(self, call_count=None, duration=None):
         """
@@ -63,6 +65,9 @@ class AsyncHTTPExecuter:
             if len(request_tasks) > 0:
                 logging.info(f"waiting for {len(request_tasks)} requests to drain")
                 await asyncio.wait(request_tasks)
+
+        if self.finish_run_func:
+            self.finish_run_func()
 
         signal.signal(signal.SIGINT, orig_sigint_handler)
         signal.signal(signal.SIGTERM, orig_sigterm_handler)
