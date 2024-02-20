@@ -141,7 +141,7 @@ def _run_load(request_builder: Iterable[dict],
          print(e)
 
    def finish_run_func():
-      """Functions to run when run is finished."""
+      """Function to run when run is finished."""
       nonlocal aggregator
       aggregator.dump_raw_call_stats()
 
