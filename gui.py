@@ -102,11 +102,11 @@ with st.expander("Settings", expanded=True):
             st.session_state.AZURE_API_URL = st.text_input("Azure API URL", "https://<YOUR_ENDPOINT>.openai.azure.com/")
             st.session_state.AZURE_API_KEY = st.text_input("Azure API Key", st.session_state.AZURE_API_KEY, type="password")
 
-    st.session_state.model = st.selectbox("Select a model", [  "gpt-4-turbo", "gpt-4","gpt-35-turbo"])
-    st.session_state.rate = st.slider("Rate", 1, 300, 5, 1)
-    st.session_state.aggregation_window = st.text_input("Aggregation window (in seconds)", "120")
-    st.session_state.clients = st.slider("Clients", 1, 100, 20, 5)
-    st.session_state.shape_profile = st.selectbox("Shape", ["context", "balanced", "generation", "custom"])
+    st.session_state.model = st.text_input("Model (deployment name)", "gpt-4-turbo")
+    st.session_state.rate = st.slider("Rate (number of request per minute, e.g.: 60 = the request will be fire every second)", 1, 300, 5, 1)
+    st.session_state.aggregation_window = st.text_input("Aggregation window (in seconds) - window for aggregation of vairous metrics in the report", "120")
+    st.session_state.clients = st.slider("Clients (Set number of parallel clients to use for load generation.)", 1, 100, 20, 5)
+    st.session_state.shape_profile = st.selectbox("Test Request Shape", ["context", "balanced", "generation", "custom"])
 
     if st.session_state.shape_profile == "custom":
         
