@@ -67,9 +67,14 @@ def main():
 
     if args.func is load and args.log_save_dir is not None:
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        shape_str = f"context={args.context_tokens}_max_tokens={args.max_tokens}" if args.shape_profile == "custom" else args.shape_profile
+        # Create log file output
+        if args.context_generation_method == "generate":
+            token_config_str = f"shape={args.shape_profile}_context-tokens={args.context_tokens}_max-tokens={args.max_tokens}" if args.shape_profile == "custom" else f"shape={args.shape_profile}"
+        else:
+
+            token_config_str = f"replay-filename={os.path.basename(args.replay_path)}_max-tokens={args.max_tokens}"
         rate_str = str(int(args.rate)) if (args.rate is not None) else 'none'
-        output_path = os.path.join(args.log_save_dir, f"{now}_{args.deployment}_shape-{shape_str}_clients={int(args.clients)}_rate={rate_str}.log")
+        output_path = os.path.join(args.log_save_dir, f"{now}_{args.deployment}_{token_config_str}_clients={int(args.clients)}_rate={rate_str}.log")
         os.makedirs(args.log_save_dir, exist_ok=True)
         try:
             os.remove(output_path)
