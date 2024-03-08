@@ -96,11 +96,14 @@ def format_num(x):
 # Settings
 #################################################################################
 with st.expander("Settings", expanded=True):
-    st.caption("To run the benchmark, make sure to set the OPENAI_API_KEY and OPENAI_API_URL environment variables")
+    
     if st.session_state.AZURE_API_KEY == "" or st.session_state.AZURE_API_URL == "":
         with st.container(border=True):
+            st.caption("To run the benchmark, make sure to set the OPENAI_API_KEY and OPENAI_API_URL environment variables")
             st.session_state.AZURE_API_URL = st.text_input("Azure API URL", "https://<YOUR_ENDPOINT>.openai.azure.com/")
             st.session_state.AZURE_API_KEY = st.text_input("Azure API Key", st.session_state.AZURE_API_KEY, type="password")
+    else:
+        st.caption(f"Azure API Key and URL are set as ENV variables! (your URL: {st.session_state.AZURE_API_URL}, your key: ********)")
 
     st.session_state.model = st.text_input("Model (deployment name)", "gpt-4-turbo")
     st.session_state.rate = st.slider("Rate (number of request per minute, e.g.: 60 = the request will be fire every second)", 1, 300, 5, 1)
@@ -202,6 +205,7 @@ with st.container(border=True):
         for child in parent.children(recursive=True):  # or parent.children() for recursive=False
             child.kill()
         parent.kill()
+        print(f"Killed process {parent_pid}")
 
     col1, col2, col3, col4 = st.columns([1, 1, 1, 1])
     with col1:
