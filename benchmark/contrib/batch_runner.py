@@ -145,6 +145,18 @@ def parse_args():
         default=3600,
         help="Seconds to wait between the start of each batch of runs (NOT from the end of one to the start of the next). Defaults to 3600 seconds (1 hour).",
     )
+    parser.add_argument(
+        "--replay-path", 
+        type=str, 
+        help="Path to JSON file containing messages for replay when using --context-message-source=replay."
+    )
+    parser.add_argument(
+        "--context-generation-method",
+        type=str,
+        default="generate",
+        help="Source of context messages to be used during testing.", 
+        choices=["generate", "replay"]
+    )
     return parser.parse_args()
 
 
@@ -157,6 +169,8 @@ def context_generation_run_to_exec_str(
     clients: int,
     prevent_server_caching: bool,
     retry: str,
+    context_generation_method: str,
+    replay_path: Optional[float] = None,
     rate: Optional[float] = None,
     duration: Optional[int] = None,
     requests: Optional[int] = None,
@@ -174,7 +188,7 @@ def context_generation_run_to_exec_str(
         f"python3 -m benchmark.bench load {api_base_endpoint} --deployment {deployment} --context-tokens {context_tokens}"
         f" --max-tokens {max_tokens} --output-format jsonl --aggregation-window {aggregation_window} --clients {clients} "
         f"--prevent-server-caching {prevent_server_caching} --retry {retry} --api-key-env {api_key_env} "
-        " --context-generation-method generate --shape custom"
+        f" --context-generation-method {context_generation_method} --shape custom"
     )
     # Add optionals
     if rate is not None:
@@ -195,6 +209,8 @@ def context_generation_run_to_exec_str(
         cmd += f" --temperature {requests}"
     if top_p is not None:
         cmd += f" --top-p {requests}"
+    if replay_path is not None:
+        cmd += f" --replay-path {replay_path}"
     return cmd
 
 
@@ -265,6 +281,8 @@ def run_context_generation_batch(
     prevent_server_caching: bool,
     start_ptum_runs_at_full_utilization: bool,
     retry: str,
+    context_generation_method: str,
+    replay_path: Optional[float],
     frequency_penalty: Optional[float],
     presence_penalty: Optional[float],
     temperature: Optional[float],
@@ -351,6 +369,8 @@ def run_context_generation_batch(
                 clients=20,
                 prevent_server_caching=True,
                 retry="none",
+                context_generation_method = context_generation_method,
+                replay_path = replay_path,
                 frequency_penalty=frequency_penalty,
                 presence_penalty=presence_penalty,
                 temperature=temperature,
@@ -379,6 +399,8 @@ def run_context_generation_batch(
             clients=clients,
             prevent_server_caching=prevent_server_caching,
             retry=retry,
+            context_generation_method = context_generation_method,
+            replay_path = replay_path,
             frequency_penalty=frequency_penalty,
             presence_penalty=presence_penalty,
             temperature=temperature,
@@ -440,6 +462,8 @@ def main():
                 temperature=args.temperature,
                 top_p=args.top_p,
                 retry=args.retry,
+                context_generation_method=args.context_generation_method,
+                replay_path=args.replay_path,
                 api_key_env=args.api_key_env,
                 api_version=args.api_version,
             )
@@ -476,6 +500,8 @@ def main():
                     temperature=args.temperature,
                     top_p=args.top_p,
                     retry=args.retry,
+                    context_generation_method=args.context_generation_method,
+                    replay_path=args.replay_path,
                     api_key_env=args.api_key_env,
                     api_version=args.api_version,
                 )
