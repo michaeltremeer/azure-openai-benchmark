@@ -149,7 +149,7 @@ class ReplayMessagesGenerator(BaseMessagesGenerator):
     def __init__(self, model: str, prevent_server_caching: bool, path: str):
         super().__init__(model, prevent_server_caching)
         # Load messages from file, checking structure
-        logging.info(f"loading replay messages from {path}...")
+        logging.info("loading and validating replay messages...")
         try:
             with open(path, "r") as f:
                 all_messages_lists = json.load(f)

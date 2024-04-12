@@ -51,10 +51,17 @@ def parse_args():
         "--deployment", type=str, help="Azure OpenAI deployment name.", required=True
     )
     parser.add_argument(
+        "--context-generation-method",
+        type=str,
+        default="generate",
+        help="Context generation method - determines whether to generate the context tokens or replay messages from a file.",
+        choices=["generate", "replay"],
+    )
+    parser.add_argument(
         "--token-rate-workload-list",
         type=str,
         default="none",
-        help="Comma-separated list of all workload args to test, in the order of <context-tokens>-<max-tokens>-<rate>. e.g. '500-100-20,3500-300-none'.",
+        help="Comma-separated list of all workload args to test, in the order of <context-tokens>-<max-tokens>-<rate>. e.g. '500-100-20,3500-300-none' when context-generation-method=generate, or 'replay_messages_1.json-100-10,replay_messages_2.json-200-20' when context-generation-method=replay",
         required=True,
     )
     parser.add_argument(
@@ -148,15 +155,17 @@ def parse_args():
     return parser.parse_args()
 
 
-def context_generation_run_to_exec_str(
+def benchmark_args_to_exec_str(
     api_base_endpoint: str,
     deployment: str,
-    context_tokens: int,
+    context_generation_method: str,
     max_tokens: int,
     aggregation_window: int,
     clients: int,
     prevent_server_caching: bool,
     retry: str,
+    context_tokens: Optional[int] = None,
+    replay_path: Optional[str] = None,
     rate: Optional[float] = None,
     duration: Optional[int] = None,
     requests: Optional[int] = None,
@@ -169,12 +178,16 @@ def context_generation_run_to_exec_str(
     api_key_env: str = "OPENAI_API_KEY",
 ):
     """Converts args into an execution string for the benchmarking script."""
+    if context_generation_method == "generate":
+        context_source_str = f"--context-tokens {context_tokens}"
+    else:
+        context_source_str = f"--replay-path {replay_path}"
     # Add required parameters
     cmd = (
-        f"python3 -m benchmark.bench load {api_base_endpoint} --deployment {deployment} --context-tokens {context_tokens}"
+        f"python3 -m benchmark.bench load {api_base_endpoint} --deployment {deployment} {context_source_str}"
         f" --max-tokens {max_tokens} --output-format jsonl --aggregation-window {aggregation_window} --clients {clients} "
         f"--prevent-server-caching {prevent_server_caching} --retry {retry} --api-key-env {api_key_env} "
-        " --context-generation-method generate --shape custom"
+        f"--context-generation-method {context_generation_method} --shape custom"
     )
     # Add optionals
     if rate is not None:
@@ -252,10 +265,11 @@ def run_benchmark_exec_str(
     return
 
 
-def run_context_generation_batch(
+def run_benchmark_batch(
     api_base_endpoint: str,
     deployment: str,
-    token_rate_workload_list: Iterable[tuple[int, int, Union[None, float]]],
+    context_generation_method: str,
+    token_rate_workload_list: Iterable[tuple[Union[str, int], int, Union[None, float]]],
     aggregation_window: int,
     duration: Optional[int],
     requests: Optional[int],
@@ -273,10 +287,11 @@ def run_context_generation_batch(
     api_version: str,
 ) -> None:
     """
-    Runs a batch of context generation benchmarks for all token rate combos
+    Runs a batch benchmarks for all token/rate combos.
     :param api_base_endpoint: Azure OpenAI deployment base endpoint.
     :param deployment: Azure OpenAI deployment name.
-    :param token_rate_workload_list: List of (context_tokens, max_tokens, rate) tuples.
+    :param context_generation_method: Context generation method - determines whether to generate the context tokens or replay messages from a file.
+    :param token_rate_workload_list: List of (context_tokens OR replay_path, max_tokens, rate) tuples.
     :param aggregation_window: Period of time over which to aggregate run statistcs.
     :param duration: Duration of each run.
     :param requests: Max number of requests in each run.
@@ -330,7 +345,7 @@ def run_context_generation_batch(
             is_ptu_deployment = False
 
     # Run the actual tests
-    for run_num, (context_tokens, max_tokens, rate) in enumerate(
+    for run_num, (context_input_arg, max_tokens, rate) in enumerate(
         token_rate_workload_list
     ):
         if start_ptum_runs_at_full_utilization and is_ptu_deployment:
@@ -338,9 +353,10 @@ def run_context_generation_batch(
                 "Running high load through PTU-M endpoint to push utilization to 100%..."
             )
             # Run high load until the PTU-M deployment is at 100% util, then kill the run
-            ptu_exec_str = context_generation_run_to_exec_str(
+            ptu_exec_str = benchmark_args_to_exec_str(
                 api_base_endpoint=api_base_endpoint,
                 deployment=deployment,
+                context_generation_method=context_generation_method,
                 context_tokens=500,
                 max_tokens=100,
                 rate=None,
@@ -364,11 +380,19 @@ def run_context_generation_batch(
                 kill_at_100_util=True,
             )
         # Run actual benchmark run, killing after request draining (to avoid wasting time or letting utilization drop between runs)
+        if context_generation_method == "generate":
+            context_tokens = context_input_arg
+            replay_path = None
+        else:
+            context_tokens = None
+            replay_path = context_input_arg
         print(f"Starting benchmark {run_num+1} of {len(token_rate_workload_list)}")
-        benchmark_exec_str = context_generation_run_to_exec_str(
+        benchmark_exec_str = benchmark_args_to_exec_str(
             api_base_endpoint=api_base_endpoint,
             deployment=deployment,
+            context_generation_method=context_generation_method,
             context_tokens=context_tokens,
+            replay_path=replay_path,
             max_tokens=max_tokens,
             rate=rate,
             log_save_dir=log_save_dir,
@@ -393,39 +417,74 @@ def run_context_generation_batch(
         )
 
 
-def main():
-    args = parse_args()
-    # Parse workload-token-profiles
-    token_rate_workload_list = []
-    for item in args.token_rate_workload_list.split(","):
+def validate_and_process_context_token_workload_list(
+    token_rate_workload_list: str, context_generation_method: str
+) -> list:
+    """Checks the format and content of token_rate_workload_list argument."""
+    valid_context_generation_methods = ("generate", "replay")
+    if context_generation_method not in valid_context_generation_methods:
+        raise ValueError(
+            f"context-generation-method invalid - must be one of {valid_context_generation_methods}"
+        )
+    print(token_rate_workload_list, context_generation_method)
+    output = list()
+    for item in token_rate_workload_list.split(","):
         split_vals = item.split("-")
         if not len(split_vals) == 3:
-            raise ValueError(
-                f"Invalid workload-token-profile '{item}'. Expected format: <context-tokens>-<max-tokens>-<rate> - e.g. 500-100-8.5."
-            )
-        context_tokens = int(split_vals[0])
+            if context_generation_method == "generate":
+                exc_string = f"Invalid token-rate-workload item '{item}'. Expected format: <context-tokens>-<max-tokens>-<rate> - e.g. '500-100-8.5'."
+            else:
+                exc_string = f"Invalid token-rate-workload item '{item}'. Expected format: <replay-filepath>-<max-tokens>-<rate> - e.g. 'replay_messages.json-100-10'. Ensure there are no dashes in the filename"
+            raise ValueError(exc_string)
+        if context_generation_method == "generate":
+            try:
+                context_definition = int(split_vals[0])
+            except Exception as e:
+                raise ValueError(
+                    f"When context-generation-method = generate, the first value in each token-rate-workload item must be a valid integer. '{split_vals[0]}' is not a valid integer."
+                )
+        else:
+            context_definition = split_vals[0]
+            if not os.path.exists(context_definition):
+                raise ValueError(
+                    f"Replay filepath '{context_definition}' not found. Make sure the first value in each token-rate-workload item is a valid filepath (relative to the directory from which the command is being run)."
+                )
         max_tokens = int(split_vals[1])
         if split_vals[2].lower() == "none":
             rate = None
         else:
             rate = float(split_vals[2])
-        token_rate_workload_list.append((context_tokens, max_tokens, rate))
+        output.append((context_definition, max_tokens, rate))
+    return output
 
+
+def main():
+    args = parse_args()
+    # Parse workload-token-profiles
+    token_rate_workload_list = validate_and_process_context_token_workload_list(
+        args.token_rate_workload_list, args.context_generation_method
+    )
     api_base_endpoint = args.api_base_endpoint[0]
 
     try:
         if args.num_batches == 1:
             log_str = "Running one batch of the following workloads:"
+            context_source_logging_str = (
+                "context_tokens"
+                if args.context_generation_method == "generate"
+                else "replay_filepath"
+            )
             for run_num, token_rate_workload in enumerate(
                 token_rate_workload_list, start=1
             ):
-                log_str += f"\n - {run_num}. context_tokens: {token_rate_workload[0]}, max_tokens: {token_rate_workload[1]}, rate: {token_rate_workload[2]}"
+                log_str += f"\n - {run_num}. {context_source_logging_str}: {token_rate_workload[0]}, max_tokens: {token_rate_workload[1]}, rate: {token_rate_workload[2]}"
             print(log_str)
             start_time = time.time()
             # Single-batch runs
-            run_context_generation_batch(
+            run_benchmark_batch(
                 api_base_endpoint=api_base_endpoint,
                 deployment=args.deployment,
+                context_generation_method=args.context_generation_method,
                 token_rate_workload_list=token_rate_workload_list,
                 aggregation_window=args.aggregation_window,
                 duration=args.duration,
@@ -459,9 +518,10 @@ def main():
             runs_completed = 0
             while runs_completed < args.num_batches:
                 print(f"Starting batch {runs_completed+1} of {args.num_batches}")
-                run_context_generation_batch(
+                run_benchmark_batch(
                     api_base_endpoint=api_base_endpoint,
                     deployment=args.deployment,
+                    context_generation_method=args.context_generation_method,
                     token_rate_workload_list=token_rate_workload_list,
                     aggregation_window=args.aggregation_window,
                     duration=args.duration,

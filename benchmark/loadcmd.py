@@ -130,7 +130,7 @@ def load(args):
             max_tokens=max_tokens,
         )
     if args.context_generation_method == "replay":
-        logging.info(f"using messages replay from {args.replay_path}")
+        logging.info(f"replaying messages from {args.replay_path}")
         messages_generator = ReplayMessagesGenerator(
             model="gpt-4-0613",
             prevent_server_caching=args.prevent_server_caching,

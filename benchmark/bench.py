@@ -71,7 +71,6 @@ def main():
         if args.context_generation_method == "generate":
             token_config_str = f"shape={args.shape_profile}_context-tokens={args.context_tokens}_max-tokens={args.max_tokens}" if args.shape_profile == "custom" else f"shape={args.shape_profile}"
         else:
-
             token_config_str = f"replay-basename={os.path.basename(args.replay_path).split('.')[0]}_max-tokens={args.max_tokens}"
         rate_str = str(int(args.rate)) if (args.rate is not None) else 'none'
         output_path = os.path.join(args.log_save_dir, f"{now}_{args.deployment}_{token_config_str}_clients={int(args.clients)}_rate={rate_str}.log")
