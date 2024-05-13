@@ -168,7 +168,7 @@ The `batch_runner` CLI can be used to run batches of benchmark runs back-to-back
 
 To use the CLI, create a list of token profile and rate combinations to be used, and then select the number of batches and interval to be used between each batch. When using the batch runner with the commands below, make sure to execute the command from the root directory of the repo.
 
-Example - Run a single batch with `context-generation-method=generate` with the following two configurations for 120 seconds each, making sure to automatically warm up the endpoint prior to each run (if it is a PTU-M endpoint):
+Example - Run a single batch with `context-generation-method=generate` with the following two configurations for 120 seconds each, making sure to automatically warm up the endpoint prior to each run (if it is a PTU-M endpoint), and also saving all request input and output content from each run:
 - context_tokens=500,  max_tokens=100, rate=20
 - context_tokens=3500, max_tokens=300, rate=7.5
 
@@ -176,7 +176,8 @@ Example - Run a single batch with `context-generation-method=generate` with the 
 $ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method generate \
     --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
-    --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true
+    --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true
 ```
 
 Example - Run the same batch as above, but 5x times and with a 1 hour delay between the start of each batch:
@@ -185,7 +186,8 @@ Example - Run the same batch as above, but 5x times and with a 1 hour delay betw
 $ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method generate \
     --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
-    --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true \
+    --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true \
     --num-batches 5 --batch-start-interval 3600
 ```
 
@@ -194,7 +196,8 @@ Example 3 - Run a batch using `context-generation-method=replay`. In this exampl
 $ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method replay \
     --token-rate-workload-list tests/test_replay_messages.json-100-20,tests/test_replay_messages.json-300-7.5 \
-    --duration 130 --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true
+    --duration 130 --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true \
 ```
 
 ## Configuration Option Details
