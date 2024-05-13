@@ -19,6 +19,9 @@ def combine_logs_to_csv(
         load_recursive: Whether to load logs in all subdirectories of log_dir.
             Defaults to True.
     """
+    if not args.save_path.endswith(".csv"):
+        save_path = args.save_path + ".csv"
+        logging.info(f"Warning: `save_path` does not end with .csv. Appending .csv to save_path. New path: {save_path}")
     log_dir = args.source_dir
     save_path = args.save_path
     stat_extraction_point = args.stat_extraction_point
@@ -44,6 +47,7 @@ def combine_logs_to_csv(
 def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) -> Optional[dict]:
     """Extracts run info from log file path"""
     assert stat_extraction_point in ["draining", "final"], "stat_extraction_point must be either 'draining' or 'final'"
+    is_format_human = False
     run_args = None
     last_logged_stats = None
     raw_samples = None
@@ -60,6 +64,10 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) ->
             # Save most recent line
             if "Load" in line:
                 run_args = json.loads(line.split("Load test args: ")[-1])
+            if line.startswith("rpm:"):
+                # Test was run with --output-format human. Cannot extract run args from this format.
+                is_format_human = True
+                break
             if "run_seconds" in line and not prevent_reading_new_stats:
                 last_logged_stats = line
             if is_draining_commenced and stat_extraction_point == "draining":
@@ -68,11 +76,16 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) ->
             if "requests to drain" in line:
                 # Current line is draining, next line is the last set of valid stats. Allow one more line to be processed.
                 is_draining_commenced = True
-            if "All data samples: " in line:
-                raw_samples = line.split("All data samples: ")[-1] # Do not load - output as string
+            if "Raw call stats: " in line:
+                raw_samples = line.split("Raw call stats: ")[-1] # Do not load - output as string
+    if is_format_human:
+        logging.error(
+            f"Could not extract run args from log file {log_file} - Data was collected with `--output-format human` (the default value). Please rerun the tests with `--output-format jsonl`."
+        )
+        return None
     if not run_args:
         logging.error(
-            f"Could not extract run args from log file {log_file} - missing run info (it might have been generated with a previous code version, or with output-version = human)."
+            f"Could not extract run args from log file {log_file} - missing run info (it might have been generated with a previous code version)."
         )
         return None
     run_args["early_terminated"] = early_terminated
@@ -85,7 +98,7 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) ->
         run_args["run_has_non_throttled_failures"] = (
             int(run_args["failures"]) - int(run_args["throttled"]) > 0
         )
-    run_args["confirmed_as_ptu_endpoint]"] = last_logged_stats["util"]["avg"] != "n/a"
+    run_args["confirmed_as_ptu_endpoint]"] = last_logged_stats["util_avg"] != "n/a"
     run_args["raw_samples"] = raw_samples
     return run_args
 

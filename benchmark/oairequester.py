@@ -35,6 +35,20 @@ class RequestStats:
         self.calls: int = 0
         self.last_exception: Optional[Exception] = None
 
+    def as_dict(self) -> dict:
+        return {
+            "request_start_time": self.request_start_time,
+            "response_status_code": self.response_status_code,
+            "response_time": round(self.response_time, 4),
+            "first_token_time": round(self.first_token_time, 4),
+            "response_end_time": round(self.response_end_time, 4),
+            "context_tokens": self.context_tokens,
+            "generated_tokens": self.generated_tokens,
+            "deployment_utilization": self.deployment_utilization,
+            "calls": self.calls,
+            "last_exception": self.last_exception,
+        }
+
 def _terminal_http_code(e) -> bool:
     # we only retry on 429
     return e.response.status != 429
@@ -109,6 +123,8 @@ class OAIRequester:
                 # fallback to backoff
                 break
 
+        if response.status != 200:
+            stats.response_end_time = time.time()
         if response.status != 200 and response.status != 429:
             logging.warning(f"call failed: {REQUEST_ID_HEADER}={response.headers[REQUEST_ID_HEADER]} {response.status}: {response.reason}")
         if self.backoff:
