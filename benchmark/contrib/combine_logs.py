@@ -77,6 +77,7 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) ->
         return None
     run_args["early_terminated"] = early_terminated
     run_args["filename"] = Path(log_file).name
+    run_args["filepath"] = log_file
     # Extract last line of valid stats from log if available
     if last_logged_stats:
         last_logged_stats = flatten_dict(json.loads(last_logged_stats))
@@ -84,6 +85,7 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str) ->
         run_args["run_has_non_throttled_failures"] = (
             int(run_args["failures"]) - int(run_args["throttled"]) > 0
         )
+    run_args["confirmed_as_ptu_endpoint]"] = last_logged_stats["util"]["avg"] != "n/a"
     run_args["raw_samples"] = raw_samples
     return run_args
 
