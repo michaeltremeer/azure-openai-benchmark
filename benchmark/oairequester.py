@@ -5,6 +5,7 @@ import asyncio
 import logging
 import time
 from typing import Optional
+import json
 
 import aiohttp
 import backoff
@@ -34,9 +35,11 @@ class RequestStats:
         self.deployment_utilization: Optional[float] = None
         self.calls: int = 0
         self.last_exception: Optional[Exception] = None
+        self.input_messages: Optional[dict[str, str]] = None
+        self.output_content: list[dict] = list()
 
-    def as_dict(self) -> dict:
-        return {
+    def as_dict(self, include_request_content: bool = False) -> dict:
+        output = {
             "request_start_time": self.request_start_time,
             "response_status_code": self.response_status_code,
             "response_time": round(self.response_time, 4),
@@ -48,6 +51,10 @@ class RequestStats:
             "calls": self.calls,
             "last_exception": self.last_exception,
         }
+        if include_request_content:
+            output["input_messages"] = self.input_messages
+            output["output_content"] = self.output_content if self.output_content else None
+        return output
 
 def _terminal_http_code(e) -> bool:
     # we only retry on 429
@@ -80,6 +87,7 @@ class OAIRequester:
         :return RequestStats.
         """
         stats = RequestStats()
+        stats.input_messages = body["messages"]
         # operate only in streaming mode so we can collect token stats.
         body["stream"] = True
         try:
@@ -142,7 +150,18 @@ class OAIRequester:
                     stats.first_token_time = time.time()
                 if stats.generated_tokens is None:
                     stats.generated_tokens = 0
-                stats.generated_tokens += 1
+                # Save content from generated tokens
+                content = line.decode('utf-8')
+                if content == "data: [DONE]\n":
+                    # Request is finished - no more tokens to process
+                    break
+                content = json.loads(content.replace("data: ", ""))["choices"][0]["delta"]
+                if content:
+                    if next(iter(content)) == "role":
+                        stats.output_content.append({"role": content["role"], "content": ""})
+                    else:
+                        stats.output_content[-1]["content"] += content["content"]
+                    stats.generated_tokens += 1
             stats.response_end_time = time.time()
 
     def _read_utilization(self, response: aiohttp.ClientResponse, stats: RequestStats):

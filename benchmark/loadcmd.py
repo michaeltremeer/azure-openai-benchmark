@@ -170,6 +170,7 @@ def load(args):
         aggregation_duration=args.aggregation_window,
         run_end_condition_mode=args.run_end_condition_mode,
         json_output=args.output_format == "jsonl",
+        log_request_content=args.log_request_content
     )
 
 def _run_load(
@@ -184,13 +185,15 @@ def _run_load(
     request_count=None,
     run_end_condition_mode="or",
     json_output=False,
+    log_request_content=False
 ):
     aggregator = _StatsAggregator(
         window_duration=aggregation_duration,
         dump_duration=1, 
         expected_gen_tokens=request_builder.max_tokens,
         clients=max_concurrency,
-        json_output=json_output)
+        json_output=json_output,
+        log_request_content=log_request_content)
     requester = OAIRequester(api_key, url, backoff=backoff)
 
     async def request_func(session:aiohttp.ClientSession):

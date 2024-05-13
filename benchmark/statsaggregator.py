@@ -60,19 +60,21 @@ class _StatsAggregator(threading.Thread):
 
    raw_stat_dicts = list()
 
-   def __init__(self, clients:int, dump_duration:float=5, window_duration:float=60, expected_gen_tokens: Optional[int] = None, json_output=False, *args,**kwargs):
+   def __init__(self, clients:int, dump_duration:float=5, window_duration:float=60, expected_gen_tokens: Optional[int] = None, json_output:bool=False, log_request_content:bool=False, *args,**kwargs):
       """
       :param clients: number of clients being used in testing.
       :param dump_duration: duration in seconds to dump current aggregates.
       :param window_duration: duration of sliding window in second to consider for aggregation.
       :param expected_gen_tokens: number of tokens expected in each response.
       :param json_output: whether to dump periodic stats as json or human readable.
+      :param log_request_content: whether to log request content in the raw call stat output.
       """
       self.clients = clients
       self.dump_duration = dump_duration
-      self.json_output = json_output
       self.window_duration = window_duration
       self.expected_gen_tokens = expected_gen_tokens
+      self.json_output = json_output
+      self.log_request_content = log_request_content
 
       super(_StatsAggregator, self).__init__(*args, **kwargs)
 
@@ -134,7 +136,7 @@ class _StatsAggregator(threading.Thread):
          if stats.deployment_utilization is not None:
             self.utilizations._append(stats.request_start_time, stats.deployment_utilization)
          # Save raw stat for the call
-         self.raw_stat_dicts.append(stats.as_dict())
+         self.raw_stat_dicts.append(stats.as_dict(include_request_content=self.log_request_content))
 
    def _dump(self):
       with self.lock:
