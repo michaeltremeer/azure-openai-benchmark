@@ -10,6 +10,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Dict, List, Tuple
 
+import numpy as np
 import wonderwords
 
 from benchmark.oaitokenizer import num_tokens_from_messages
@@ -44,10 +45,9 @@ class BaseMessagesGenerator(ABC):
         Returns a modified copy of messages and an updated token count.
         """
         messages = copy.deepcopy(messages)
-        for message in messages:
-            message["content"] = str(time.time()) + " " + message["content"]
-            # Timestamps strings like "1704441942.868042 " use 8 tokens for OpenAI GPT models. Update token count
-            messages_tokens += 8
+        messages[0]["content"] = str(time.time()) + " " + messages[0]["content"]
+        # Timestamps strings like "1704441942.868042 " use 8 tokens for OpenAI GPT models. Update token count
+        messages_tokens += 8
         return (messages, messages_tokens)
 
     def remove_anticache_prefix(
@@ -148,7 +148,7 @@ class ReplayMessagesGenerator(BaseMessagesGenerator):
     def __init__(self, model: str, prevent_server_caching: bool, path: str):
         super().__init__(model, prevent_server_caching)
         # Load messages from file, checking structure
-        logging.info("loading messages from file")
+        logging.info("loading and validating replay messages...")
         try:
             with open(path, "r") as f:
                 all_messages_lists = json.load(f)
@@ -173,6 +173,10 @@ class ReplayMessagesGenerator(BaseMessagesGenerator):
         for messages in all_messages_lists:
             messages_tokens = num_tokens_from_messages(messages, model)
             self._cached_messages_and_tokens.append((messages, messages_tokens))
+
+        logging.info(
+            f"replay messages successfully loaded. average number of context_tokens across all messages: {round(np.mean([x[1] for x in self._cached_messages_and_tokens]))}"
+        )
 
     def generate_messages(self) -> Tuple[Dict[str, str], int]:
         """

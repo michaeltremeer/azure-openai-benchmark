@@ -35,6 +35,7 @@ class _RequestBuilder:
         presence_penalty: None,
         temperature: None,
         top_p: None,
+        model: None,
     ):
         self.messages_generator = messages_generator
         self.max_tokens = max_tokens
@@ -43,6 +44,7 @@ class _RequestBuilder:
         self.presence_penalty = presence_penalty
         self.temperature = temperature
         self.top_p = top_p
+        self.model = model
 
     def __iter__(self) -> Iterator[dict]:
         return self
@@ -62,6 +64,9 @@ class _RequestBuilder:
             body["temperature"] = self.temperature
         if self.top_p is not None:
             body["top_p"] = self.top_p
+        # model param is only for openai.com endpoints
+        if self.model is not None:
+            body["model"] = self.model
         return body, messages_tokens
 
 
@@ -78,6 +83,7 @@ def load(args):
         "clients": args.clients,
         "requests": args.requests,
         "duration": args.duration,
+        "run_end_condition_mode": args.run_end_condition_mode,
         "rate": args.rate,
         "aggregation_window": args.aggregation_window,
         "context_generation_method": args.context_generation_method,
@@ -94,13 +100,20 @@ def load(args):
         "temperature": args.temperature,
         "top_p": args.top_p,
         "output_format": args.output_format,
+        "log_request_content": args.log_request_content,
     }
     converted = json.dumps(run_args)
     logging.info("Load test args: " + converted)
 
     api_key = os.getenv(args.api_key_env)
-    url = args.api_base_endpoint[0] + "/openai/deployments/" + args.deployment + "/chat/completions"
-    url += "?api-version=" + args.api_version
+    # Check if endpoint is openai.com, otherwise we will assume it is Azure OpenAI
+    is_openai_com_endpoint = "openai.com" in args.api_base_endpoint[0]
+    # Set URL
+    if is_openai_com_endpoint:
+        url = args.api_base_endpoint[0]
+    else:
+        url = args.api_base_endpoint[0] + "/openai/deployments/" + args.deployment + "/chat/completions"
+        url += "?api-version=" + args.api_version
 
     rate_limiter = NoRateLimiter()
     if args.rate is not None and args.rate > 0:
@@ -129,11 +142,20 @@ def load(args):
             max_tokens=max_tokens,
         )
     if args.context_generation_method == "replay":
-        logging.info(f"using messages replay from {args.replay_path}")
+        logging.info(f"replaying messages from {args.replay_path}")
         messages_generator = ReplayMessagesGenerator(
             model="gpt-4-0613",
             prevent_server_caching=args.prevent_server_caching,
             path=args.replay_path,
+        )
+
+    if args.run_end_condition_mode == "and":
+        logging.info(
+            f"run-end-condition-mode='{args.run_end_condition_mode}': run will not end until BOTH the `requests` and `duration` limits are reached"
+        )
+    else:
+        logging.info(
+            f"run-end-condition-mode='{args.run_end_condition_mode}': run will end when EITHER the `requests` or `duration` limit is reached"
         )
 
     request_builder = _RequestBuilder(
@@ -144,6 +166,7 @@ def load(args):
         presence_penalty=args.presence_penalty,
         temperature=args.temperature,
         top_p=args.top_p,
+        model=args.deployment if is_openai_com_endpoint else None,
     )
 
     logging.info("starting load...")
@@ -158,7 +181,9 @@ def load(args):
         request_count=args.requests,
         duration=args.duration,
         aggregation_duration=args.aggregation_window,
+        run_end_condition_mode=args.run_end_condition_mode,
         json_output=args.output_format == "jsonl",
+        log_request_content=args.log_request_content
     )
 
 def _run_load(
@@ -171,14 +196,17 @@ def _run_load(
     duration=None,
     aggregation_duration=60,
     request_count=None,
+    run_end_condition_mode="or",
     json_output=False,
+    log_request_content=False
 ):
     aggregator = _StatsAggregator(
         window_duration=aggregation_duration,
         dump_duration=1, 
         expected_gen_tokens=request_builder.max_tokens,
         clients=max_concurrency,
-        json_output=json_output)
+        json_output=json_output,
+        log_request_content=log_request_content)
     requester = OAIRequester(api_key, url, backoff=backoff)
 
     async def request_func(session:aiohttp.ClientSession):
@@ -193,12 +221,17 @@ def _run_load(
         except Exception as e:
             print(e)
 
+    def finish_run_func():
+      """Function to run when run is finished."""
+      nonlocal aggregator
+      aggregator.dump_raw_call_stats()
+
     executer = AsyncHTTPExecuter(
-        request_func, rate_limiter=rate_limiter, max_concurrency=max_concurrency
+        request_func, rate_limiter=rate_limiter, max_concurrency=max_concurrency, finish_run_func=finish_run_func
     )
 
     aggregator.start()
-    executer.run(call_count=request_count, duration=duration)
+    executer.run(call_count=request_count, duration=duration, run_end_condition_mode=run_end_condition_mode)
     aggregator.stop()
 
     logging.info("finished load test")
@@ -217,6 +250,8 @@ def _validate(args):
         raise ValueError("requests must be > 0")
     if args.duration is not None and args.duration != 0 and args.duration < 30:
         raise ValueError("duration must be > 30")
+    if args.run_end_condition_mode not in ("and", "or"):
+        raise ValueError("run-end-condition-mode must be one of: ['and', 'or']")
     if args.rate is not None and args.rate < 0:
         raise ValueError("rate must be > 0")
     if args.context_generation_method == "replay":

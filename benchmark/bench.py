@@ -33,8 +33,9 @@ def main():
     load_parser.add_argument("-a", "--api-version", type=str, default="2023-05-15", help="Set OpenAI API version.")
     load_parser.add_argument("-k", "--api-key-env", type=str, default="OPENAI_API_KEY", help="Environment variable that contains the API KEY.")
     load_parser.add_argument("-c", "--clients", type=int, default=20, help="Set number of parallel clients to use for load generation.")
-    load_parser.add_argument("-n", "--requests", type=int, help="Number of requests for the load run. Default to 'until killed'.")
+    load_parser.add_argument("-n", "--requests", type=int, help="Number of requests for the load run (whether successful or not). Default to 'until killed'.")
     load_parser.add_argument("-d", "--duration", type=int, help="Duration of load in seconds. Defaults to 'until killed'.")
+    load_parser.add_argument("--run-end-condition-mode", type=str, help="Determines whether both the `requests` and `duration` args must be reached before ending the run ('and'), or whether to end the run when either arg is reached ('or'). If only one arg is set, the run will end when it is reached. Defaults to 'or'.", choices=["and", "or"], default="or")
     load_parser.add_argument("-r", "--rate", type=float, help="Rate of request generation in Requests Per Minute (RPM). Default to as fast as possible.")
     load_parser.add_argument("-w", "--aggregation-window", type=float, default=60, help="Statistics aggregation sliding window duration in seconds. See README.md for more details.")
     load_parser.add_argument("--context-generation-method", type=str, default="generate", help="Source of context messages to be used during testing.", choices=["generate", "replay"])
@@ -50,9 +51,10 @@ def main():
     load_parser.add_argument("--top-p", type=float, help="Request top_p.")
     load_parser.add_argument("-f", "--output-format", type=str, default="human", help="Output format.", choices=["jsonl", "human"])
     load_parser.add_argument("--log-save-dir", type=str, help="If provided, will save stddout to this directory. Filename will include important run parameters.")
+    load_parser.add_argument("--log-request-content", type=str2bool, nargs='?', help="If True, will log the raw input and output tokens of every request. Defaults to False.", const=True, default=False)
     load_parser.add_argument("-t", "--retry", type=str, default="none", help="Request retry strategy. See README for details", choices=["none", "exponential"])
-    load_parser.add_argument("-e", "--deployment", type=str, help="Azure OpenAI deployment name.", required=True)
-    load_parser.add_argument("api_base_endpoint", help="Azure OpenAI deployment base endpoint.", nargs=1)
+    load_parser.add_argument("-e", "--deployment", type=str, help="Azure OpenAI deployment name, or OpenAI.com model name.", required=True)
+    load_parser.add_argument("api_base_endpoint", help="Azure OpenAI deployment base endpoint (or OpenAI.com chat completions endpoint).", nargs=1)
     load_parser.set_defaults(func=load)
 
     tokenizer_parser = sub_parsers.add_parser("tokenize", help="Text tokenization tool.")
@@ -69,9 +71,13 @@ def main():
 
     if args.func is load and args.log_save_dir is not None:
         now = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        shape_str = f"context={args.context_tokens}_max_tokens={args.max_tokens}" if args.shape_profile == "custom" else args.shape_profile
+        # Create log file output
+        if args.context_generation_method == "generate":
+            token_config_str = f"shape={args.shape_profile}_context-tokens={args.context_tokens}_max-tokens={args.max_tokens}" if args.shape_profile == "custom" else f"shape={args.shape_profile}"
+        else:
+            token_config_str = f"replay-basename={os.path.basename(args.replay_path).split('.')[0]}_max-tokens={args.max_tokens}"
         rate_str = str(int(args.rate)) if (args.rate is not None) else 'none'
-        output_path = os.path.join(args.log_save_dir, f"{now}_{args.deployment}_shape-{shape_str}_clients={int(args.clients)}_rate={rate_str}.log")
+        output_path = os.path.join(args.log_save_dir, f"{now}_{args.deployment}_{token_config_str}_clients={int(args.clients)}_rate={rate_str}.log")
         os.makedirs(args.log_save_dir, exist_ok=True)
         try:
             os.remove(output_path)

@@ -2,7 +2,7 @@
 
 > :warning: **Code in this repo is written for testing purposes and should not be used in production**
 
-The Azure OpenAI Benchmarking tool is designed to aid customers in benchmarking their provisioned-throughput deployments. Provisioned throughput deployments provide a set amount of model compute. But determining the exact performance for you application is dependent on several variables such as: prompt size, generation size and call rate. 
+The Azure OpenAI Benchmarking tool is designed to aid customers in benchmarking their provisioned-throughput deployments. Provisioned throughput deployments provide a set amount of model compute. But determining the exact performance for you application is dependent on several variables such as: prompt size, generation size and call rate. This tool supports both Azure OpenAI and OpenAI.com model endpoints.
 
 The benchmarking tool provides a simple way to run test traffic on your deploymnet and validate the throughput for your traffic workloads. The script will output key performance statistics including the average and 95th percentile latencies and utilization of the deployment. 
 
@@ -32,6 +32,7 @@ $ docker run azure-openai-benchmarking load --help
 
 Consider the following guidelines when creating your benchmark tests
 
+1. **Read the CLI argument descriptions by running `benchmark.bench load -h`**. Start by reading about each of the arguments and how they work. This will help you design your test with the right parameters.
 1. **Ensure call characteristics match your production expectations**. The number of calls per minute and total tokens you are able to process varies depending on the prompt size, generation size and call rate.
 1. **Run your test long enough to reach a stable state**. Throttling is based on the total compute you have deployed and are utilizing. The utilization includes active calls. As a result you will see a higher call rate when ramping up on an unloaded deployment because there are no existing active calls being processed. Once your deplyoment is fully loaded with a utilzation near 100%, throttling will increase as calls can only be processed as earlier ones are completed. To ensure an accurate measure, set the duration long enough for the throughput to stabilize, especialy when running at or close to 100% utilization. Also note that once the test ends (either by termination, or reaching the maximum duration or number of requests), any pending requests will continue to drain, which can result in lower throughput values as the load on the endpoint gradually decreases to 0.
 1. **Consider whether to use a retry strategy, and the effect of throttling on the resulting stats**. There are careful considerations when selecting a retry strategy, as the resulting latency statistics will be effected if the resource is pushed beyond it's capacity and to the point of throttling.
@@ -90,7 +91,7 @@ $ python -m benchmark.bench load \
     https://myaccount.openai.azure.com
 ```
 
-**Load test with custom request shape**
+**Load test with custom request shape, and automatically save output to file**
 
 ```
 $ python -m benchmark.bench load \
@@ -99,6 +100,21 @@ $ python -m benchmark.bench load \
     --shape custom \
     --context-tokens 1000 \
     --max-tokens 500 \
+    --log-save-dir logs/ \
+    https://myaccount.openai.azure.com
+```
+
+**As above, but also record the timestamps, call status and input & output content of every individual request**
+
+```
+$ python -m benchmark.bench load \
+    --deployment gpt-4 \
+    --rate 1 \
+    --shape custom \
+    --context-tokens 1000 \
+    --max-tokens 500 \
+    --log-save-dir logs/ \
+    --log-request-content true \
     https://myaccount.openai.azure.com
 ```
 
@@ -121,12 +137,67 @@ $ cat mychatcontext.json | python -m benchmark.bench tokenize \
 tokens: 65
 ```
 
-## Contibutions
+## Contibuted modules
 **Extract and Combine JSON logs to CSV**
 
-The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts the run arguments as well as the final set of stats prior to the run ending (either by termination or hitting the request/duration limit).
+The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts:
+* The arguments that were used to initiate the benchmarking run
+* The aggregate statistics of all requests in the run
+* With `--include-raw-request-info true`, the timestamps, call status and all input/output content of every individual request will be extracted and saved into the combined CSV. This can be used to plot distributions of values, and start/finish of each individual request.
+
+Additionally, the `--load-recursive` arg will search not only in the provided directory, but all subdirectories as well.
+
+Note: The core benchmarking tool waits for any incomplete requests to 'drain' when the end of the run is reached, without replacing these requests with new ones. This can mean that overall TPM and RPM can begin to drop after the draining point as all remaining requests slowly finish, dragging the average TPM and RPM statistics down. For this reason, it is recommended to use `--stat-extraction-point draining` to extract the aggregate statistcs that were logged when draining began (and prior to any reduction in throughput). If however you are more interested in latency values and do not care about the RPM and TPM values, use `--stat-extraction-point final`, which will extract the very last line of logged statistics (which should include all completed requests that are still within the aggregation window).
 ```
-$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive
+# Extract stats that were logged when the duration/requests limit was reached
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point draining
+
+# Extract aggregate AND individual call stats that were logged when the duration/requests limit was reached
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point draining --include-raw-request-info true
+
+# Extract the very last line of logs, after the very last request has finished
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point final
+```
+
+**Run Batches of Multiple Configurations**
+
+The `batch_runner` CLI can be used to run batches of benchmark runs back-to-back. Currently, this CLI only works for runs where `context-generation-method = generation`. The CLI also includes a `--start-ptum-runs-at-full-utilization` argument (default=`true`), which will warm up any PTU-M model endpoints to 100% utilization prior to testing, which is critical for ensuring that test results reflect accurate real-world performance and is enabled by default. To see the full list of args which can be used for all runs in each batch, run `python -m benchmark.contrib.batch_runner -h`.
+
+To use the CLI, create a list of token profile and rate combinations to be used, and then select the number of batches and interval to be used between each batch. When using the batch runner with the commands below, make sure to execute the command from the root directory of the repo.
+
+Example - Run a single batch with `context-generation-method=generate` with the following two configurations for 120 seconds each, making sure to automatically warm up the endpoint prior to each run (if it is a PTU-M endpoint), and also saving all request input and output content from each run:
+- context_tokens=500,  max_tokens=100, rate=20
+- context_tokens=3500, max_tokens=300, rate=7.5
+
+```
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
+    --deployment gpt-4-1106-ptu --context-generation-method generate \
+    --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
+    --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true
+```
+
+Example - Run the same batch as above, but 5x times and with a 1 hour delay between the start of each batch:
+
+```
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
+    --deployment gpt-4-1106-ptu --context-generation-method generate \
+    --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
+    --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true \
+    --num-batches 5 --batch-start-interval 3600
+```
+
+Example 3 - Run a batch using `context-generation-method=replay`. In this example, the first item in the token-rate-workload-list is the path to the replay messages dataset (see the next section for more info on how this works). Make sure that the replay messages filename does not contain dashes, and that the path is relative to the directory from which you are running the command:
+```
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
+    --deployment gpt-4-1106-ptu --context-generation-method replay \
+    --token-rate-workload-list tests/test_replay_messages.json-100-20,tests/test_replay_messages.json-300-7.5 \
+    --duration 130 --aggregation-window 120 --log-save-dir logs/ \
+    --start-ptum-runs-at-full-utilization true --log-request-content true \
 ```
 
 ## Configuration Option Details
@@ -160,7 +231,7 @@ In this mode, all messages in the file are sampled randomly when making requests
       {"role": "user", "content": "What is the capital of France?"},
       {"role": "assistant", "content": "The capital of France is Paris."},
       {"role": "user", "content": "Please tell me about the history of Paris."}
-    ],
+    ]
 ]
 ```
 
@@ -197,6 +268,8 @@ Setting `--prevent-server-caching=false` is only recommended when a sufficiently
 |`e2e_95th`|95th percentile of end to end request time.|yes|`1.5`|
 |`util_avg`|Average deployment utilization percentage as reported by the service.|yes|`89.3%`|
 |`util_95th`|95th percentile of deployment utilization percentage as reported by the service.|yes|`91.2%`|
+
+Note: Prior to the benchmarking run reaching `aggregation-window` in elapsed time, all sliding window stats will be calculated over a dynamic window, equal to the time elapsed since starting the test. This ensures RPM/TPM stats are relatively accurate prior to the test reaching completion, including when a test ends early due to reaching the request limit.
 
 ## Contributing
 
