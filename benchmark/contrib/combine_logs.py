@@ -23,7 +23,7 @@ def combine_logs_to_csv(
         save_path = args.save_path + ".csv"
         logging.info(f"Warning: `save_path` does not end with .csv. Appending .csv to save_path. New path: {save_path}")
     log_dir = args.source_dir
-    include_raw_call_info = args.include_raw_call_info
+    include_raw_request_info = args.include_raw_request_info
     stat_extraction_point = args.stat_extraction_point
     load_recursive = args.load_recursive
 
@@ -31,7 +31,7 @@ def combine_logs_to_csv(
     log_files = log_dir.rglob("*.log") if load_recursive else log_dir.glob("*.log")
     log_files = sorted(log_files)
     # Extract run info from each log file
-    run_summaries = [extract_run_info_from_log_path(log_file, stat_extraction_point, include_raw_call_info) for log_file in log_files]
+    run_summaries = [extract_run_info_from_log_path(log_file, stat_extraction_point, include_raw_request_info) for log_file in log_files]
     run_summaries = [summary for summary in run_summaries if isinstance(summary, dict)]
     # Convert to dataframe and save to csv
     if run_summaries:
@@ -44,7 +44,7 @@ def combine_logs_to_csv(
     return
 
 
-def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, include_raw_call_info: bool) -> Optional[dict]:
+def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, include_raw_request_info: bool) -> Optional[dict]:
     """Extracts run info from log file path"""
     assert stat_extraction_point in ["draining", "final"], "stat_extraction_point must be either 'draining' or 'final'"
     is_format_human = False
@@ -77,7 +77,7 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, in
             if "requests to drain" in line:
                 # Current line is draining, next line is the last set of valid stats. Allow one more line to be processed.
                 is_draining_commenced = True
-            if include_raw_call_info and "Raw call stats: " in line:
+            if include_raw_request_info and "Raw call stats: " in line:
                 raw_samples = line.split("Raw call stats: ")[-1] # Do not load as json - output as string
     if is_format_human:
         logging.error(
@@ -151,7 +151,7 @@ def main():
         "save_path", type=str, help="Path to save the output output CSV."
     )
     parser.add_argument(
-        "--include-raw-call-info", 
+        "--include-raw-request-info", 
         type=str2bool, 
         nargs='?', 
         help="If True, all raw request info (timestamps, call status, request content) will be included for each individual request in every run where it is available.",

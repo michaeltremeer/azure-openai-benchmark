@@ -143,7 +143,7 @@ tokens: 65
 The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts:
 * The arguments that were used to initiate the benchmarking run
 * The aggregate statistics of all requests in the run
-* With `--include-raw-call-info true`, the timestamps, call status and all input/output content of every individual request. This can be used to plot distributions of values, and start/finish of each individual request.
+* With `--include-raw-request-info true`, the timestamps, call status and all input/output content of every individual request will be extracted and saved into the combined CSV. This can be used to plot distributions of values, and start/finish of each individual request.
 
 Additionally, the `--load-recursive` arg will search not only in the provided directory, but all subdirectories as well.
 
@@ -155,7 +155,7 @@ $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recurs
 
 # Extract aggregate AND individual call stats that were logged when the duration/requests limit was reached
 $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
-    --stat-extraction-point draining --include-raw-call-info true
+    --stat-extraction-point draining --include-raw-request-info true
 
 # Extract the very last line of logs, after the very last request has finished
 $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
