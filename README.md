@@ -91,7 +91,7 @@ $ python -m benchmark.bench load \
     https://myaccount.openai.azure.com
 ```
 
-**Load test with custom request shape**
+**Load test with custom request shape, and automatically save output to file**
 
 ```
 $ python -m benchmark.bench load \
@@ -100,6 +100,21 @@ $ python -m benchmark.bench load \
     --shape custom \
     --context-tokens 1000 \
     --max-tokens 500 \
+    --log-save-dir logs/ \
+    https://myaccount.openai.azure.com
+```
+
+**As above, but also record the timestamps, call status and input & output content of every individual request**
+
+```
+$ python -m benchmark.bench load \
+    --deployment gpt-4 \
+    --rate 1 \
+    --shape custom \
+    --context-tokens 1000 \
+    --max-tokens 500 \
+    --log-save-dir logs/ \
+    --log-request-content true \
     https://myaccount.openai.azure.com
 ```
 
@@ -125,15 +140,26 @@ tokens: 65
 ## Contibuted modules
 **Extract and Combine JSON logs to CSV**
 
-The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts the run arguments, a valid set of aggregate statistics (as determined by `--stat-extraction-point`), and all raw request statistics of requests within the aggregation window at the end of the run. The `--load-recursive` arg will search not only in the provided directory, but all subdirectories as well.
+The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts:
+* The arguments that were used to initiate the benchmarking run
+* The aggregate statistics of all requests in the run
+* With `--include-raw-call-info true`, the timestamps, call status and all input/output content of every individual request. This can be used to plot distributions of values, and start/finish of each individual request.
+
+Additionally, the `--load-recursive` arg will search not only in the provided directory, but all subdirectories as well.
 
 Note: The core benchmarking tool waits for any incomplete requests to 'drain' when the end of the run is reached, without replacing these requests with new ones. This can mean that overall TPM and RPM can begin to drop after the draining point as all remaining requests slowly finish, dragging the average TPM and RPM statistics down. For this reason, it is recommended to use `--stat-extraction-point draining` to extract the aggregate statistcs that were logged when draining began (and prior to any reduction in throughput). If however you are more interested in latency values and do not care about the RPM and TPM values, use `--stat-extraction-point final`, which will extract the very last line of logged statistics (which should include all completed requests that are still within the aggregation window).
 ```
 # Extract stats that were logged when the duration/requests limit was reached
-$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive --stat-extraction-point draining
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point draining
+
+# Extract aggregate AND individual call stats that were logged when the duration/requests limit was reached
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point draining --include-raw-call-info true
 
 # Extract the very last line of logs, after the very last request has finished
-$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive --stat-extraction-point final
+$ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
+    --stat-extraction-point final
 ```
 
 **Run Batches of Multiple Configurations**
@@ -147,7 +173,7 @@ Example - Run a single batch with `context-generation-method=generate` with the 
 - context_tokens=3500, max_tokens=300, rate=7.5
 
 ```
-$ python -m benchmark.contrib.batch_runner https://gbb-ea-openai-swedencentral-01.openai.azure.com/ \
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method generate \
     --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
     --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true
@@ -156,7 +182,7 @@ $ python -m benchmark.contrib.batch_runner https://gbb-ea-openai-swedencentral-0
 Example - Run the same batch as above, but 5x times and with a 1 hour delay between the start of each batch:
 
 ```
-$ python -m benchmark.contrib.batch_runner https://gbb-ea-openai-swedencentral-01.openai.azure.com/ \
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method generate \
     --token-rate-workload-list 500-100-20,3500-300-7.5 --duration 130 \
     --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true \
@@ -165,7 +191,7 @@ $ python -m benchmark.contrib.batch_runner https://gbb-ea-openai-swedencentral-0
 
 Example 3 - Run a batch using `context-generation-method=replay`. In this example, the first item in the token-rate-workload-list is the path to the replay messages dataset (see the next section for more info on how this works). Make sure that the replay messages filename does not contain dashes, and that the path is relative to the directory from which you are running the command:
 ```
-$ python -m benchmark.contrib.batch_runner https://gbb-ea-openai-swedencentral-01.openai.azure.com/ \
+$ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
     --deployment gpt-4-1106-ptu --context-generation-method replay \
     --token-rate-workload-list tests/test_replay_messages.json-100-20,tests/test_replay_messages.json-300-7.5 \
     --duration 130 --aggregation-window 120 --log-save-dir logs/ --start-ptum-runs-at-full-utilization true
