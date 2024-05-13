@@ -45,10 +45,9 @@ class BaseMessagesGenerator(ABC):
         Returns a modified copy of messages and an updated token count.
         """
         messages = copy.deepcopy(messages)
-        for message in messages:
-            message["content"] = str(time.time()) + " " + message["content"]
-            # Timestamps strings like "1704441942.868042 " use 8 tokens for OpenAI GPT models. Update token count
-            messages_tokens += 8
+        messages[0]["content"] = str(time.time()) + " " + messages[0]["content"]
+        # Timestamps strings like "1704441942.868042 " use 8 tokens for OpenAI GPT models. Update token count
+        messages_tokens += 8
         return (messages, messages_tokens)
 
     def remove_anticache_prefix(
