@@ -31,7 +31,6 @@ from ..oairequester import TELEMETRY_USER_AGENT_HEADER, USER_AGENT, UTILIZATION_
 
 def str2bool(v):
     if isinstance(v, bool):
-
         return v
     if v.lower() in ("yes", "true", "t", "y", "1"):
         return True
@@ -106,6 +105,14 @@ def parse_args():
         help="If provided, will save stddout to this directory. Filename will include important run parameters.",
     )
     parser.add_argument(
+        "--log-request-content",
+        type=str2bool,
+        nargs="?",
+        help="If True, will log the raw input and output tokens of every request. Defaults to False.",
+        const=True,
+        default=False,
+    )
+    parser.add_argument(
         "--retry",
         type=str,
         default="none",
@@ -175,6 +182,7 @@ def benchmark_args_to_exec_str(
     temperature: Optional[float] = None,
     top_p: Optional[float] = None,
     log_save_dir: Optional[str] = None,
+    log_request_content: Optional[bool] = None,
     api_key_env: str = "OPENAI_API_KEY",
 ):
     """Converts args into an execution string for the benchmarking script."""
@@ -200,6 +208,8 @@ def benchmark_args_to_exec_str(
         cmd += f" --run-end-condition-mode {run_end_condition_mode}"
     if log_save_dir is not None:
         cmd += f" --log-save-dir {log_save_dir}"
+    if log_request_content is not None:
+        cmd += f" --log-request-content {log_request_content}"
     if frequency_penalty is not None:
         cmd += f" --frequency-penalty {requests}"
     if presence_penalty is not None:
@@ -276,6 +286,7 @@ def run_benchmark_batch(
     run_end_condition_mode: str,
     clients: Optional[int],
     log_save_dir: str,
+    log_request_content: Optional[bool],
     prevent_server_caching: bool,
     start_ptum_runs_at_full_utilization: bool,
     retry: str,
@@ -298,6 +309,7 @@ def run_benchmark_batch(
     :param run_end_condition_mode: Determines whether both the `requests` and `duration` args must be reached before ending the run ('and'), or whether to end the run either either arg is reached ('or'). Defaults to 'or'.
     :param clients: Number of clients to use in each test.
     :param log_save_dir: Will save all logs to this directory.
+    :param log_request_content: If True, will log the raw input and output content of every request.
     :param prevent_server_caching: Whether to prevent server caching in each test.
     :param start_ptum_runs_at_full_utilization: For PTU-M deployments, run a high load run through the endpoint prior to each and every benchmark run to ensure benchmnark runs start at 100% utilization (avoiding the effect of burst capacity influencing the results).
     :param retry: Request retry strategy.
@@ -361,6 +373,7 @@ def run_benchmark_batch(
                 max_tokens=100,
                 rate=None,
                 log_save_dir=None,
+                log_request_content=False,
                 aggregation_window=60,
                 duration=None,
                 requests=None,
@@ -396,6 +409,7 @@ def run_benchmark_batch(
             max_tokens=max_tokens,
             rate=rate,
             log_save_dir=log_save_dir,
+            log_request_content=log_request_content,
             aggregation_window=aggregation_window,
             duration=duration,
             requests=requests,
@@ -493,6 +507,7 @@ def main():
                 run_end_condition_mode=args.run_end_condition_mode,
                 clients=args.clients,
                 log_save_dir=args.log_save_dir,
+                log_request_content=args.log_request_content,
                 prevent_server_caching=args.prevent_server_caching,
                 start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
                 frequency_penalty=args.frequency_penalty,
@@ -530,6 +545,7 @@ def main():
                     run_end_condition_mode=args.run_end_condition_mode,
                     clients=args.clients,
                     log_save_dir=args.log_save_dir,
+                    log_request_content=args.log_request_content,
                     prevent_server_caching=args.prevent_server_caching,
                     start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
                     frequency_penalty=args.frequency_penalty,

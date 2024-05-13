@@ -42,9 +42,9 @@ class RequestStats:
         output = {
             "request_start_time": self.request_start_time,
             "response_status_code": self.response_status_code,
-            "response_time": round(self.response_time, 4),
-            "first_token_time": round(self.first_token_time, 4),
-            "response_end_time": round(self.response_end_time, 4),
+            "response_time": self.response_time,
+            "first_token_time": self.first_token_time,
+            "response_end_time": self.response_end_time,
             "context_tokens": self.context_tokens,
             "generated_tokens": self.generated_tokens,
             "deployment_utilization": self.deployment_utilization,

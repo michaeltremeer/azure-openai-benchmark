@@ -95,6 +95,7 @@ def load(args):
         "temperature": args.temperature,
         "top_p": args.top_p,
         "output_format": args.output_format,
+        "log_request_content": args.log_request_content,
     }
     converted = json.dumps(run_args)
     logging.info("Load test args: " + converted)
