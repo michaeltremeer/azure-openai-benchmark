@@ -426,7 +426,8 @@ def validate_and_process_context_token_workload_list(
         raise ValueError(
             f"context-generation-method invalid - must be one of {valid_context_generation_methods}"
         )
-    print(token_rate_workload_list, context_generation_method)
+    if " " in token_rate_workload_list:
+        raise ValueError("Error: token-rate-workload-list must not contain spaces.")
     output = list()
     for item in token_rate_workload_list.split(","):
         split_vals = item.split("-")
