@@ -35,6 +35,7 @@ class _RequestBuilder:
         presence_penalty: None,
         temperature: None,
         top_p: None,
+        model: None,
     ):
         self.messages_generator = messages_generator
         self.max_tokens = max_tokens
@@ -43,6 +44,7 @@ class _RequestBuilder:
         self.presence_penalty = presence_penalty
         self.temperature = temperature
         self.top_p = top_p
+        self.model = model
 
     def __iter__(self) -> Iterator[dict]:
         return self
@@ -62,6 +64,9 @@ class _RequestBuilder:
             body["temperature"] = self.temperature
         if self.top_p is not None:
             body["top_p"] = self.top_p
+        # model param is only for openai.com endpoints
+        if self.model is not None:
+            body["model"] = self.model
         return body, messages_tokens
 
 
@@ -101,8 +106,14 @@ def load(args):
     logging.info("Load test args: " + converted)
 
     api_key = os.getenv(args.api_key_env)
-    url = args.api_base_endpoint[0] + "/openai/deployments/" + args.deployment + "/chat/completions"
-    url += "?api-version=" + args.api_version
+    # Check if endpoint is openai.com, otherwise we will assume it is Azure OpenAI
+    is_openai_com_endpoint = "openai.com" in args.api_base_endpoint[0]
+    # Set URL
+    if is_openai_com_endpoint:
+        url = args.api_base_endpoint[0]
+    else:
+        url = args.api_base_endpoint[0] + "/openai/deployments/" + args.deployment + "/chat/completions"
+        url += "?api-version=" + args.api_version
 
     rate_limiter = NoRateLimiter()
     if args.rate is not None and args.rate > 0:
@@ -155,6 +166,7 @@ def load(args):
         presence_penalty=args.presence_penalty,
         temperature=args.temperature,
         top_p=args.top_p,
+        model=args.deployment if is_openai_com_endpoint else None,
     )
 
     logging.info("starting load...")

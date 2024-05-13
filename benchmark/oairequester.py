@@ -104,10 +104,14 @@ class OAIRequester:
                       giveup=_terminal_http_code)
     async def _call(self, session:aiohttp.ClientSession, body: dict, stats: RequestStats):
         headers = {
-            "api-key": self.api_key,
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             TELEMETRY_USER_AGENT_HEADER: USER_AGENT,
         }
+        if "openai.com" in self.url:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        else:
+            headers["api-key"] = self.api_key
         stats.request_start_time = time.time()
         while stats.calls == 0 or time.time() - stats.request_start_time < MAX_RETRY_SECONDS:
             stats.calls += 1
@@ -161,7 +165,7 @@ class OAIRequester:
                         stats.output_content.append({"role": content["role"], "content": ""})
                     else:
                         stats.output_content[-1]["content"] += content["content"]
-                    stats.generated_tokens += 1
+                        stats.generated_tokens += 1
             stats.response_end_time = time.time()
 
     def _read_utilization(self, response: aiohttp.ClientResponse, stats: RequestStats):
