@@ -104,10 +104,10 @@ class OAIRequester:
                       giveup=_terminal_http_code)
     async def _call(self, session:aiohttp.ClientSession, body: dict, stats: RequestStats):
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             TELEMETRY_USER_AGENT_HEADER: USER_AGENT,
         }
+        # Add api-key depending on whether it is an OpenAI.com or Azure OpenAI deployment
         if "openai.com" in self.url:
             headers["Authorization"] = f"Bearer {self.api_key}"
         else:
