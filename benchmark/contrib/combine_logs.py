@@ -22,7 +22,7 @@ def combine_logs_to_csv(
     save_path = args.save_path
     if not save_path.endswith(".csv"):
         save_path = save_path + ".csv"
-        logging.info(f"Warning: `save_path` arg does not end with '.csv' - appending .csv to save_path. New path: {save_path}")
+        logging.info(f"Warning: `save_path` arg does not end with '.csv' - appending '.csv' to save_path. New path: {save_path}")
     log_dir = args.source_dir
     include_raw_request_info = args.include_raw_request_info
     stat_extraction_point = args.stat_extraction_point
