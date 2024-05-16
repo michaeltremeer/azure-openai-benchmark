@@ -6,4 +6,9 @@ backoff
 wonderwords
 asyncio
 aiohttp
+streamlit
 pandas
+matplotlib
+plotly
+python-dotenv
+psutil
