@@ -7,3 +7,4 @@ wonderwords
 asyncio
 aiohttp
 pandas
+pillow
