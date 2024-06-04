@@ -49,7 +49,7 @@ class RequestStats:
             "generated_tokens": self.generated_tokens,
             "deployment_utilization": self.deployment_utilization,
             "calls": self.calls,
-            "last_exception": self.last_exception,
+            "last_exception": f"{type(self.last_exception).__name__}: {self.last_exception}" if self.last_exception else None,
         }
         if include_request_content:
             output["input_messages"] = self.input_messages
