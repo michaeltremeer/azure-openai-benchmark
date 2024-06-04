@@ -368,7 +368,7 @@ def run_benchmark_batch(
             ptu_exec_str = benchmark_args_to_exec_str(
                 api_base_endpoint=api_base_endpoint,
                 deployment=deployment,
-                context_generation_method=context_generation_method,
+                context_generation_method="generate",
                 context_tokens=500,
                 max_tokens=100,
                 rate=None,
