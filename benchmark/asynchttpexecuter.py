@@ -1,12 +1,14 @@
 
-import aiohttp
 import asyncio
-import time
-import signal
 import logging
 import os
+import signal
+import time
 from datetime import timedelta
 from typing import Callable
+
+import aiohttp
+
 from .ratelimiting import NoRateLimiter
 
 # Threshold in seconds to warn about requests lagging behind target rate.
@@ -76,8 +78,8 @@ class AsyncHTTPExecuter:
                         run_end_conditions_met = request_limit_reached or duration_limit_reached
 
             if len(request_tasks) > 0:
-                logging.info(f"waiting for {len(request_tasks)} requests to drain")
-                await asyncio.wait(request_tasks)
+                logging.info(f"waiting for {len(request_tasks)} requests to drain (up to a max of 30 seconds)")
+                await asyncio.wait(request_tasks, timeout=30)
 
             if self.finish_run_func:
                 self.finish_run_func()
