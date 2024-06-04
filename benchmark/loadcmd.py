@@ -120,6 +120,7 @@ def load(args):
         rate_limiter = RateLimiter(args.rate, 60)
 
     max_tokens = args.max_tokens
+    model = "gpt-4o" if "gpt-4o" in args.deployment else "gpt-4-0613"
     if args.context_generation_method == "generate":
         context_tokens = args.context_tokens
         if args.shape_profile == "balanced":
@@ -136,7 +137,7 @@ def load(args):
             f"using random messages generation with shape profile {args.shape_profile}: context tokens: {context_tokens}, max tokens: {max_tokens}"
         )
         messages_generator = RandomMessagesGenerator(
-            model="gpt-4-0613",
+            model=model,
             prevent_server_caching=args.prevent_server_caching,
             tokens=context_tokens,
             max_tokens=max_tokens,
@@ -144,7 +145,7 @@ def load(args):
     if args.context_generation_method == "replay":
         logging.info(f"replaying messages from {args.replay_path}")
         messages_generator = ReplayMessagesGenerator(
-            model="gpt-4-0613",
+            model=model,
             prevent_server_caching=args.prevent_server_caching,
             path=args.replay_path,
         )
