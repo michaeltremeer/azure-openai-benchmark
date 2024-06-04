@@ -218,7 +218,7 @@ Note: With the default prompting strategy, OpenAI models will typically return c
 
 **2: `replay`**: Messages are loaded from a JSON file and replayed back to the endpoint. This is useful for scenarios where testing with real-world data is important, and that data has already been generated or collected from an existing LLM application. 
 
-In this mode, all messages in the file are sampled randomly when making requests to the endpoint. This means the same message may be used multiple times in a benchmarking run, plus any anti-caching prefix if `prevent-server-caching=true`. The format of the JSON file should be a single array containing separate lists of messages which conform to the [OpenAI chat completions API schema](https://platform.openai.com/docs/api-reference/chat/create), like so:
+In this mode, all messages in the file are sampled randomly when making requests to the endpoint. This means the same message may be used multiple times in a benchmarking run, plus any anti-caching prefix if `prevent-server-caching=true`. The format of the JSON file should be a single array containing separate lists of messages which conform to the [OpenAI chat completions API schema](https://platform.openai.com/docs/api-reference/chat/create). Two examples are available in the `tests/` folder, with the text-only example as follows:
 
 ```
 [
