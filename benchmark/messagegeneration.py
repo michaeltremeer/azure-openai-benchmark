@@ -78,6 +78,9 @@ class RandomMessagesGenerator(BaseMessagesGenerator):
     """
 
     _cached_messages_and_tokens: List[Tuple[Dict[str, str], int]] = []
+    # RandomWord() will return the full vocab if return_less_if_necessary is True, 
+    # so we need to limit the number of words for each call manually
+    _max_random_words = int(len(wonderwords.RandomWord().random_words(return_less_if_necessary=True)) / 3)
 
     def __init__(
         self,
@@ -112,7 +115,7 @@ class RandomMessagesGenerator(BaseMessagesGenerator):
             if remaining_tokens <= 0:
                 break
             prompt += (
-                " ".join(r.random_words(amount=math.ceil(remaining_tokens / 4))) + " "
+                " ".join(r.random_words(amount=min(math.ceil(remaining_tokens / 4), self._max_random_words))) + " "
             )
             messages[0]["content"] = base_prompt + prompt
 
