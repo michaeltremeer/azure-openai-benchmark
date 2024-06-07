@@ -65,9 +65,13 @@ def num_tokens_from_messages(messages, model):
 
     if model in {
         "gpt-35-turbo",
+        "gpt-3.5-turbo",
         "gpt-35-turbo-0613",
+        "gpt-3.5-turbo-0613",
         "gpt-35-turbo-16k-0613",
+        "gpt-3.5-turbo-16k-0613",
         "gpt-35-turbo-16k",
+        "gpt-3.5-turbo-16k",
         "gpt-4-0314",
         "gpt-4-32k-0314",
         "gpt-4-0613",
@@ -76,14 +80,14 @@ def num_tokens_from_messages(messages, model):
     }:
         tokens_per_message = 3
         tokens_per_name = 1
-    elif model == "gpt-35-turbo-0301":
+    elif model == "gpt-35-turbo-0301" or model == "gpt-3.5-turbo-0301":
         tokens_per_message = (
             4  # every message follows <|start|>{role/name}\n{content}<|end|>\n
         )
         tokens_per_name = -1  # if there's a name, the role is omitted
-    elif "gpt-35-turbo" in model:
+    elif "gpt-35-turbo" in model or "gpt-3.5-turbo" in model:
         logging.warn(
-            "Warning: gpt-35-turbo may update over time. Returning num tokens assuming gpt-35-turbo-0613."
+            "Warning: gpt-3.5-turbo may update over time. Returning num tokens assuming gpt-35-turbo-0613."
         )
         return num_tokens_from_messages(messages, model="gpt-35-turbo-0613")
     elif "gpt-4o" in model:
