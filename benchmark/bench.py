@@ -58,8 +58,8 @@ def main():
     tokenizer_parser.add_argument(
         "-m", "--model", type=str, help="Model to assume for tokenization.", 
         choices=[
-            "gpt-4", "gpt-4-0314", "gpt-4-32k-0314", "gpt-4-0613", "gpt-4-32k-0613", 
-            "gpt-3.5-turbo", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613"], 
+            "gpt-4", "gpt-4o", "gpt-4-0314", "gpt-4-32k-0314", "gpt-4-0613", "gpt-4-32k-0613", 
+            "gpt-35-turbo", "gpt-35-turbo-0613", "gpt-35-turbo-16k-0613"], 
         required=True)
     tokenizer_parser.add_argument("text", help="Input text or chat messages json to tokenize. Default to stdin.", nargs="?")
     tokenizer_parser.set_defaults(func=tokenize)
