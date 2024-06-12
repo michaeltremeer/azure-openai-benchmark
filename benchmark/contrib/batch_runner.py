@@ -234,44 +234,47 @@ def run_benchmark_exec_str(
     :param kill_when_draining_begins: If True, the run will be killed as soon as requests start to drain. This prevents PTU utilization dropping as the last requests finish.
     :param kill_at_100_util: If True and the endpoint is a PTU-M model deployment, the run will be killed as soon as utilization 95th is above 98%. This ensures the endpoint has no 'burst credits' prior to the next run.
     """
-    # try:
     process = subprocess.Popen(
         shlex.split(exec_str), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
     )
     draining_started = False
+    try:
+        while True:
+            nextline = process.stdout.readline().decode("unicode_escape")
+            if nextline == "" and process.poll() is not None:
+                break
 
-    while True:
-        nextline = process.stdout.readline().decode("unicode_escape")
-        if nextline == "" and process.poll() is not None:
-            break
-
-        if nextline:
-            if print_terminal_output:
-                print(nextline.strip())
-            # Kill process if utilization exceeds 98%
-            if kill_at_100_util and '"util":' in nextline:
-                # Load utilization - should be last subdict in the output - should be one of either:
-                # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
-                # PTU and first response is received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
-                util_dict = json.loads(nextline.split('"util": ')[1][:-2])
-                last_util_95th = util_dict["95th"]
-                if last_util_95th != "n/a":
-                    last_util_95th = float(last_util_95th[:-2])
-                    if last_util_95th > 98:
-                        print(
-                            "PTU-M utilization exceeded 98% - terminating warmup run process"
-                        )
-                        process.kill()
-            # Kill process if run draining has occurred. Make sure to kill process after one more line of stats has been logged.
-            if kill_when_draining_begins and draining_started:
-                print(
-                    "Draining detected and final stats are logged - terminating process immediately."
-                )
-                process.kill()
-            if kill_when_draining_begins:
-                # Set drain var so run is killed after next line is processed
-                if "drain" in nextline:
-                    draining_started = True
+            if nextline:
+                if print_terminal_output:
+                    print(nextline.strip())
+                # Kill process if utilization exceeds 98%
+                if kill_at_100_util and '"util":' in nextline:
+                    # Load utilization - should be last subdict in the output - should be one of either:
+                    # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
+                    # PTU and first response has been received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
+                    util_dict = json.loads(nextline.split('"util": ')[1][:-2])
+                    last_util_95th = util_dict["95th"]
+                    if last_util_95th != "n/a":
+                        last_util_95th = float(last_util_95th[:-2])
+                        if last_util_95th > 98:
+                            print(
+                                "PTU-M utilization exceeded 98% - terminating warmup run process"
+                            )
+                            process.kill()
+                # Kill process if run draining has occurred. Make sure to kill process after one more line of stats has been logged.
+                if kill_when_draining_begins and draining_started:
+                    print(
+                        "Draining detected and final stats are logged - terminating process immediately."
+                    )
+                    process.kill()
+                if kill_when_draining_begins:
+                    # Set drain var so run is killed after next line is processed
+                    if "drain" in nextline:
+                        draining_started = True
+    except Exception:
+        # Ensure process is ended in case an error occurred when reading the output
+        process.kill()
+        raise
     return
 
 
