@@ -8,3 +8,4 @@ asyncio
 aiohttp
 pandas
 pillow
+ping3

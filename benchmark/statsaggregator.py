@@ -60,7 +60,18 @@ class _StatsAggregator(threading.Thread):
 
    raw_stat_dicts = list()
 
-   def __init__(self, clients:int, dump_duration:float=5, window_duration:float=60, expected_gen_tokens: Optional[int] = None, json_output:bool=False, log_request_content:bool=False, *args,**kwargs):
+   def __init__(
+         self, 
+         clients:int, 
+         dump_duration:float=5, 
+         window_duration:float=60, 
+         expected_gen_tokens: Optional[int] = None, 
+         json_output:bool=False, 
+         log_request_content:bool=False, 
+         network_latency_adjustment:float=0, 
+         *args,
+         **kwargs
+      ):
       """
       :param clients: number of clients being used in testing.
       :param dump_duration: duration in seconds to dump current aggregates.
@@ -68,6 +79,7 @@ class _StatsAggregator(threading.Thread):
       :param expected_gen_tokens: number of tokens expected in each response.
       :param json_output: whether to dump periodic stats as json or human readable.
       :param log_request_content: whether to log request content in the raw call stat output.
+      :param network_latency_adjustment: amount of time (in ms) to subtract from the latency metrics of each request.
       """
       self.clients = clients
       self.dump_duration = dump_duration
@@ -75,6 +87,7 @@ class _StatsAggregator(threading.Thread):
       self.expected_gen_tokens = expected_gen_tokens
       self.json_output = json_output
       self.log_request_content = log_request_content
+      self.network_latency_adjustment = network_latency_adjustment
 
       super(_StatsAggregator, self).__init__(*args, **kwargs)
 
@@ -119,7 +132,7 @@ class _StatsAggregator(threading.Thread):
             if stats.response_status_code == 429:
                self.throttled_count += 1
          else:
-            request_latency = stats.response_end_time - stats.request_start_time
+            request_latency = stats.response_end_time - stats.request_start_time - self.network_latency_adjustment
             self.request_latency._append(stats.request_start_time, request_latency)
             if request_latency > self.window_duration:
                logging.warning((
@@ -128,9 +141,9 @@ class _StatsAggregator(threading.Thread):
                   )
                )   
             self.request_timestamps._append(stats.request_start_time, stats.request_start_time)
-            self.response_latencies._append(stats.request_start_time, stats.response_time - stats.request_start_time)
-            self.first_token_latencies._append(stats.request_start_time, stats.first_token_time - stats.request_start_time)
-            self.token_latencies._append(stats.request_start_time, (stats.response_end_time - stats.first_token_time) / stats.generated_tokens)
+            self.response_latencies._append(stats.request_start_time, stats.response_time - stats.request_start_time - self.network_latency_adjustment)
+            self.first_token_latencies._append(stats.request_start_time, stats.first_token_time - stats.request_start_time - self.network_latency_adjustment)
+            self.token_latencies._append(stats.request_start_time, (stats.response_end_time - stats.first_token_time - self.network_latency_adjustment) / stats.generated_tokens)
             self.context_tokens._append(stats.request_start_time, stats.context_tokens)
             self.generated_tokens._append(stats.request_start_time, stats.generated_tokens)
          if stats.deployment_utilization is not None:

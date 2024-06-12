@@ -51,6 +51,8 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, in
     is_format_human = False
     run_args = None
     last_logged_stats = None
+    model_detected = None
+    latency_adjustment_secs = 0
     raw_samples = None
     early_terminated = False
     is_confirmed_as_ptu_endpoint = False
@@ -72,6 +74,10 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, in
                 break
             if "run_seconds" in line and not prevent_reading_new_stats:
                 last_logged_stats = line
+            if "model detected:" in line:
+                model_detected = line.split("model detected: ")[-1].strip()
+            if "average ping to endpoint:" in line:
+                latency_adjustment_secs = float(line.split("average ping to endpoint: ")[-1].split("ms")[0].strip()) / 1000
             if is_draining_commenced and stat_extraction_point == "draining":
                 # Previous line was draining, use this line as the last set of valid stats
                 prevent_reading_new_stats = True
@@ -93,6 +99,8 @@ def extract_run_info_from_log_path(log_file: str, stat_extraction_point: str, in
     run_args["early_terminated"] = early_terminated
     run_args["filename"] = Path(log_file).name
     run_args["filepath"] = log_file
+    run_args["model_detected"] = model_detected
+    run_args["latency_adjustment_seconds"] = latency_adjustment_secs
     # Extract last line of valid stats from log if available
     if last_logged_stats:
         last_logged_stats = flatten_dict(json.loads(last_logged_stats))

@@ -5,10 +5,13 @@ import json
 import logging
 import os
 import sys
+import time
 from typing import Iterable, Iterator
+from urllib.parse import urlsplit
 
 import aiohttp
 import requests
+from ping3 import ping
 
 from benchmark.messagegeneration import (
     BaseMessagesGenerator,
@@ -108,7 +111,9 @@ def load(args):
 
     api_key = os.getenv(args.api_key_env)
     if not api_key:
-        raise ValueError(f"API key is not set - make sure to set the environment variable '{args.api_key_env}'")
+        raise ValueError(
+            f"API key is not set - make sure to set the environment variable '{args.api_key_env}'"
+        )
     # Check if endpoint is openai.com, otherwise we will assume it is Azure OpenAI
     is_openai_com_endpoint = "openai.com" in args.api_base_endpoint[0]
     # Set URL
@@ -127,7 +132,6 @@ def load(args):
     if args.rate is not None and args.rate > 0:
         rate_limiter = RateLimiter(args.rate, 60)
 
-    max_tokens = args.max_tokens
     # Check model name in order to correctly estimate tokens
     if is_openai_com_endpoint:
         model = args.deployment
@@ -147,6 +151,16 @@ def load(args):
         model = response.json()["model"]
     logging.info(f"model detected: {model}")
 
+    if args.adjust_for_network_latency:
+        logging.info("checking ping to endpoint...")
+        network_latency_adjustment = measure_avg_ping(url)
+        logging.info(
+            f"average ping to endpoint: {int(network_latency_adjustment*1000)}ms. this will be subtracted from all aggregate latency metrics."
+        )
+    else:
+        network_latency_adjustment = 0
+
+    max_tokens = args.max_tokens
     if args.context_generation_method == "generate":
         context_tokens = args.context_tokens
         if args.shape_profile == "balanced":
@@ -211,6 +225,7 @@ def load(args):
         run_end_condition_mode=args.run_end_condition_mode,
         json_output=args.output_format == "jsonl",
         log_request_content=args.log_request_content,
+        network_latency_adjustment=network_latency_adjustment,
     )
 
 
@@ -227,6 +242,7 @@ def _run_load(
     run_end_condition_mode="or",
     json_output=False,
     log_request_content=False,
+    network_latency_adjustment=0
 ):
     aggregator = _StatsAggregator(
         window_duration=aggregation_duration,
@@ -235,6 +251,7 @@ def _run_load(
         clients=max_concurrency,
         json_output=json_output,
         log_request_content=log_request_content,
+        network_latency_adjustment=network_latency_adjustment,
     )
     requester = OAIRequester(api_key, url, backoff=backoff)
 
@@ -315,3 +332,22 @@ def _validate(args):
         raise ValueError("presence-penalty must be between -2.0 and 2.0")
     if args.temperature is not None and (args.temperature < 0 or args.temperature > 2):
         raise ValueError("temperature must be between 0 and 2.0")
+
+
+def measure_avg_ping(url: str, num_requests: int = 5, max_time: int = 5):
+    """Measures average network latency for a given URL by sending multiple ping requests."""
+    ping_url = urlsplit(url).netloc
+    latencies = []
+    latency_test_start_time = time.time()
+    while (
+        len(latencies) < num_requests
+        and time.time() < latency_test_start_time + max_time
+    ):
+        delay = ping(ping_url, timeout=5)
+        latencies.append(delay)
+        if delay < 0.5:  # Ensure at least 0.5 seconds between requests
+            time.sleep(0.5 - delay)
+    avg_latency = round(
+        sum(latencies) / len(latencies), 2
+    )  # exclude first request, this is usually 3-5x slower
+    return avg_latency
