@@ -252,10 +252,10 @@ def run_benchmark_exec_str(
                     # Load utilization - should be last subdict in the output - should be one of either:
                     # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
                     # PTU and first response has been received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
-                    util_dict = json.loads(nextline.split('"util": ')[1][:-2])
+                    util_dict = json.loads(nextline.split('"util": ')[1][:-1])
                     last_util_95th = util_dict["95th"]
                     if last_util_95th != "n/a":
-                        last_util_95th = float(last_util_95th[:-2])
+                        last_util_95th = float(last_util_95th[:-1])
                         if last_util_95th > 98:
                             print(
                                 "PTU-M utilization exceeded 98% - terminating warmup run process"
@@ -273,6 +273,7 @@ def run_benchmark_exec_str(
                         draining_started = True
     except Exception:
         # Ensure process is ended in case an error occurred when reading the output
+        print("Error: Benchmarking process failed")
         process.kill()
         raise
     return
