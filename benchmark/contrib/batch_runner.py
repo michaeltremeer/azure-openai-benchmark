@@ -252,7 +252,7 @@ def run_benchmark_exec_str(
                     # Load utilization - should be last subdict in the output - should be one of either:
                     # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
                     # PTU and first response has been received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
-                    util_dict = json.loads(nextline.split('"util": ')[1][:-1])
+                    util_dict = json.loads(nextline.split('"util": ')[1][:-2])
                     last_util_95th = util_dict["95th"]
                     if last_util_95th != "n/a":
                         last_util_95th = float(last_util_95th[:-1])
@@ -390,12 +390,15 @@ def run_benchmark_batch(
                 top_p=top_p,
                 api_key_env=api_key_env,
             )
-            run_benchmark_exec_str(
-                exec_str=ptu_exec_str,
-                print_terminal_output=False,
-                kill_when_draining_begins=True,
-                kill_at_100_util=True,
-            )
+            try:
+                run_benchmark_exec_str(
+                    exec_str=ptu_exec_str,
+                    print_terminal_output=False,
+                    kill_when_draining_begins=True,
+                    kill_at_100_util=True,
+                )
+            except KeyboardInterrupt as _kbi:
+                print("Keyboard interrupt detected. Exiting warmup run...")
         # Run actual benchmark run, killing after request draining (to avoid wasting time or letting utilization drop between runs)
         if context_generation_method == "generate":
             context_tokens = context_input_arg
@@ -427,12 +430,15 @@ def run_benchmark_batch(
             top_p=top_p,
             api_key_env=api_key_env,
         )
-        run_benchmark_exec_str(
-            exec_str=benchmark_exec_str,
-            print_terminal_output=True,
-            kill_when_draining_begins=False,
-            kill_at_100_util=False,
-        )
+        try:
+            run_benchmark_exec_str(
+                exec_str=benchmark_exec_str,
+                print_terminal_output=True,
+                kill_when_draining_begins=False,
+                kill_at_100_util=False,
+            )
+        except KeyboardInterrupt as _kbi:
+            print("Keyboard interrupt detected. Exiting current run...")
 
 
 def validate_and_process_context_token_workload_list(
