@@ -113,6 +113,14 @@ def parse_args():
         default=False,
     )
     parser.add_argument(
+        "--adjust-for-network-latency", 
+        type=str2bool, 
+        nargs='?', 
+        help="If True, will subtract base network delay from all latency measurements (based on ping). Only use this when trying to simulate the results as if the test machine was in the same data centre as the endpoint. Defaults to False.", 
+        const=True, 
+        default=False
+    )
+    parser.add_argument(
         "--retry",
         type=str,
         default="none",
@@ -181,6 +189,7 @@ def benchmark_args_to_exec_str(
     presence_penalty: Optional[float] = None,
     temperature: Optional[float] = None,
     top_p: Optional[float] = None,
+    adjust_for_network_latency: Optional[bool] = None,
     log_save_dir: Optional[str] = None,
     log_request_content: Optional[bool] = None,
     api_key_env: str = "OPENAI_API_KEY",
@@ -206,6 +215,8 @@ def benchmark_args_to_exec_str(
         cmd += f" --requests {requests}"
     if run_end_condition_mode is not None:
         cmd += f" --run-end-condition-mode {run_end_condition_mode}"
+    if adjust_for_network_latency is not None:
+        cmd += f" --adjust-for-network-latency {adjust_for_network_latency}"
     if log_save_dir is not None:
         cmd += f" --log-save-dir {log_save_dir}"
     if log_request_content is not None:
@@ -289,6 +300,7 @@ def run_benchmark_batch(
     requests: Optional[int],
     run_end_condition_mode: str,
     clients: Optional[int],
+    adjust_for_network_latency: Optional[bool],
     log_save_dir: str,
     log_request_content: Optional[bool],
     prevent_server_caching: bool,
@@ -312,6 +324,7 @@ def run_benchmark_batch(
     :param requests: Max number of requests in each run.
     :param run_end_condition_mode: Determines whether both the `requests` and `duration` args must be reached before ending the run ('and'), or whether to end the run either either arg is reached ('or'). Defaults to 'or'.
     :param clients: Number of clients to use in each test.
+    :param adjust_for_network_latency: If True, will subtract base network delay from all latency measurements (based on ping). Only use this when trying to simulate the results as if the test machine was in the same data centre as the endpoint.
     :param log_save_dir: Will save all logs to this directory.
     :param log_request_content: If True, will log the raw input and output content of every request.
     :param prevent_server_caching: Whether to prevent server caching in each test.
@@ -417,6 +430,7 @@ def run_benchmark_batch(
             rate=rate,
             log_save_dir=log_save_dir,
             log_request_content=log_request_content,
+            adjust_for_network_latency=adjust_for_network_latency,
             aggregation_window=aggregation_window,
             duration=duration,
             requests=requests,
@@ -518,6 +532,7 @@ def main():
                 clients=args.clients,
                 log_save_dir=args.log_save_dir,
                 log_request_content=args.log_request_content,
+                adjust_for_network_latency=args.adjust_for_network_latency,
                 prevent_server_caching=args.prevent_server_caching,
                 start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
                 frequency_penalty=args.frequency_penalty,
@@ -556,6 +571,7 @@ def main():
                     clients=args.clients,
                     log_save_dir=args.log_save_dir,
                     log_request_content=args.log_request_content,
+                    adjust_for_network_latency=args.adjust_for_network_latency,
                     prevent_server_caching=args.prevent_server_caching,
                     start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
                     frequency_penalty=args.frequency_penalty,

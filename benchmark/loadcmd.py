@@ -103,6 +103,7 @@ def load(args):
         "presence_penalty": args.presence_penalty,
         "temperature": args.temperature,
         "top_p": args.top_p,
+        "adjust_for_network_latency": args.adjust_for_network_latency,
         "output_format": args.output_format,
         "log_request_content": args.log_request_content,
     }
