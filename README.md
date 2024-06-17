@@ -201,7 +201,7 @@ $ python -m benchmark.contrib.batch_runner https://myaccount.openai.azure.com/ \
 ```
 
 ## Configuration Option Details
-### Context Generation Method
+#### Context Generation Method
 Using the `--context-generation-method` argument, this tool gives two options for how the source content of each request is generated:
 
 **1: `generate`** [default]: Context information is generated automatically from a list of all english words, and the endpoint is instructed to generate a long story of `max_tokens` words. This is useful where existing data is not yet available, and should reslt in similar performance as real-world workoads with the same number of context & completion tokens.
@@ -235,7 +235,8 @@ In this mode, all messages in the file are sampled randomly when making requests
 ]
 ```
 
-In addition, when `--prevent-server-caching=true`, every message in each request payload is prefixed with a random string to force the inference endpoint to process each request without any optimization/caching that might occur if workloads are the same. This ensures that the results observed while running the tool are the worst case scenario for given traffic shape. For example:
+#### Prevent Server Caching
+When `--prevent-server-caching=true`, every message in each request payload is prefixed with a random string to force the inference endpoint to process each request without any optimization/caching that might occur if workloads are the same. This ensures that the results observed while running the tool are the worst case scenario for given traffic shape. For example:
 
 |initial request|request with random prefixes|
 |-|-|
@@ -243,6 +244,13 @@ In addition, when `--prevent-server-caching=true`, every message in each request
 ||{"role": "user", "content": "1704441963.715898 Can you explain how photosynthesis works?"}|
 
 Setting `--prevent-server-caching=false` is only recommended when a sufficiently large replay dataset is available (e.g. at least double the number of messages than the total number of requests to be made across all test runs in a session). If the cache needs to be cleared/reset for additional runs, it is recommended that the PTU model deployment should be deleted and recreated in order to reload the model with an empty cache.
+
+#### Adjust for Network Latency
+The `--adjust-for-network-latency` argument will adjust all aggregate statistics based on the network delay (using a ping test) between the testing machine and the model endpoint. This makes it easy to test models across different regions from a single machine without having the results influenced by the time it takes for requests to traverse the globe. Note that this will only adjust the results of aggregate statistics (e.g. those listed in the Output Fields section down below); all individual call results will maintain their original timestamps and will need to be adjusted separtely.
+
+#### Log Request Content
+At the end of each bencmark run, the raw call statistics (such as request start time, time of first token, request end time, and num context and generation tokens) will be logged for every request that occurred within the test (both the successes and failures). If the `--log-request-content` argument is set to `true`, this dump will also include the raw input messages and output completion for each request. This is useful in cases where you want to compare the generated content between different endpoints.
+
 
 ### Output fields
 
