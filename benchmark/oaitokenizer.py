@@ -4,6 +4,7 @@
 import base64
 import logging
 from io import BytesIO
+from importlib.metadata import version
 
 import tiktoken
 from PIL import Image
@@ -60,8 +61,17 @@ def get_base64_img_dimensions(base64_image: str) -> tuple[int, int]:
 
 def num_tokens_from_messages(messages, model):
     """Return the number of tokens used by a list of messages."""
-
-    encoding = tiktoken.encoding_for_model(model)
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError as e:
+        if "Could not automatically map" in str(e):
+            raise RuntimeError(
+                (
+                    f"Unsupported tiktoken model: '{model}'. This is usually caused by an out-of-date version of tiktoken (your version: {version('tiktoken')})."
+                    "Please run `pip install --upgrade -r requirements.txt` to upgrade all dependencies to their latest versions, then try again."
+                )
+            ) from e
+        raise
 
     if model in {
         "gpt-35-turbo",
