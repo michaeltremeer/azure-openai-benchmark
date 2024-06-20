@@ -7,6 +7,7 @@ import logging
 import threading
 import time
 from typing import Optional
+import traceback
 
 import numpy as np
 
@@ -124,30 +125,34 @@ class _StatsAggregator(threading.Thread):
       :param stats: request stats object.
       """
       with self.lock:
-         self.processing_requests_count -= 1
-         self.total_requests_count += 1
-         self.call_tries._append(stats.request_start_time, stats.calls)
-         if stats.response_status_code != 200:
-            self.total_failed_count += 1
-            if stats.response_status_code == 429:
-               self.throttled_count += 1
-         else:
-            request_latency = stats.response_end_time - stats.request_start_time - self.network_latency_adjustment
-            self.request_latency._append(stats.request_start_time, request_latency)
-            if request_latency > self.window_duration:
-               logging.warning((
-                     f"request completed in {round(request_latency, 2)} seconds, while aggregation-window is {round(self.window_duration, 2)} "
-                     "seconds, consider increasing aggregation-window to at least 2x your typical request latency."
-                  )
-               )   
-            self.request_timestamps._append(stats.request_start_time, stats.request_start_time)
-            self.response_latencies._append(stats.request_start_time, stats.response_time - stats.request_start_time - self.network_latency_adjustment)
-            self.first_token_latencies._append(stats.request_start_time, stats.first_token_time - stats.request_start_time - self.network_latency_adjustment)
-            self.token_latencies._append(stats.request_start_time, (stats.response_end_time - stats.first_token_time - self.network_latency_adjustment) / stats.generated_tokens)
-            self.context_tokens._append(stats.request_start_time, stats.context_tokens)
-            self.generated_tokens._append(stats.request_start_time, stats.generated_tokens)
-         if stats.deployment_utilization is not None:
-            self.utilizations._append(stats.request_start_time, stats.deployment_utilization)
+         try:
+            self.processing_requests_count -= 1
+            self.total_requests_count += 1
+            self.call_tries._append(stats.request_start_time, stats.calls)
+            if stats.response_status_code != 200:
+               self.total_failed_count += 1
+               if stats.response_status_code == 429:
+                  self.throttled_count += 1
+            else:
+               request_latency = stats.response_end_time - stats.request_start_time - self.network_latency_adjustment
+               self.request_latency._append(stats.request_start_time, request_latency)
+               if request_latency > self.window_duration:
+                  logging.warning((
+                        f"request completed in {round(request_latency, 2)} seconds, while aggregation-window is {round(self.window_duration, 2)} "
+                        "seconds, consider increasing aggregation-window to at least 2x your typical request latency."
+                     )
+                  )   
+               self.request_timestamps._append(stats.request_start_time, stats.request_start_time)
+               self.response_latencies._append(stats.request_start_time, stats.response_time - stats.request_start_time - self.network_latency_adjustment)
+               self.first_token_latencies._append(stats.request_start_time, stats.first_token_time - stats.request_start_time - self.network_latency_adjustment)
+               self.token_latencies._append(stats.request_start_time, (stats.response_end_time - stats.first_token_time - self.network_latency_adjustment) / stats.generated_tokens)
+               self.context_tokens._append(stats.request_start_time, stats.context_tokens)
+               self.generated_tokens._append(stats.request_start_time, stats.generated_tokens)
+            if stats.deployment_utilization is not None:
+               self.utilizations._append(stats.request_start_time, stats.deployment_utilization)
+         except Exception as e:
+            exc_str = '\n'.join(traceback.format_exc().splitlines()[-3:])
+            logging.error(f"error while aggregating request stats: {exc_str}")
          # Save raw stat for the call
          self.raw_stat_dicts.append(stats.as_dict(include_request_content=self.log_request_content))
 

@@ -6,6 +6,7 @@ import logging
 import time
 from typing import Optional
 import json
+import traceback
 
 import aiohttp
 import backoff
@@ -49,11 +50,12 @@ class RequestStats:
             "generated_tokens": self.generated_tokens,
             "deployment_utilization": self.deployment_utilization,
             "calls": self.calls,
-            "last_exception": f"{type(self.last_exception).__name__}: {self.last_exception}" if self.last_exception else None,
         }
         if include_request_content:
             output["input_messages"] = self.input_messages
             output["output_content"] = self.output_content if self.output_content else None
+        # Add last_exception last, to keep it pretty
+        output["last_exception"] = self.last_exception
         return output
 
 def _terminal_http_code(e) -> bool:
@@ -93,7 +95,7 @@ class OAIRequester:
         try:
             await self._call(session, body, stats)
         except Exception as e:
-            stats.last_exception = e
+            stats.last_exception = traceback.format_exc()
 
         return stats
 
@@ -161,7 +163,7 @@ class OAIRequester:
                     break
                 content = json.loads(content.replace("data: ", ""))["choices"][0]["delta"]
                 if content:
-                    if next(iter(content)) == "role":
+                    if "role" in content:
                         stats.output_content.append({"role": content["role"], "content": ""})
                     else:
                         stats.output_content[-1]["content"] += content["content"]
