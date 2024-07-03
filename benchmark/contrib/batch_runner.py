@@ -337,7 +337,12 @@ def run_benchmark_batch(
     :param api_key_env: Environment variable that contains the API KEY.
     :param api_version: API version to use. Defaults to '2023-05-15'.
     """
-    is_ptu_deployment = None
+    is_ptu_deployment = False
+    if start_ptum_runs_at_full_utilization and "openai.com" in api_base_endpoint:
+        print(
+            "Endpoint is an OpenAI.com deployment - No warmup of the endpoint will be completed."
+        )
+        start_ptum_runs_at_full_utilization = False
     if start_ptum_runs_at_full_utilization:
         print("Checking whether endpoint is PTU-M deployment...")
         # Send a test request to check whether the endpoint returns a utilization header
