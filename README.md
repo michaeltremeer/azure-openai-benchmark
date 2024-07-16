@@ -138,7 +138,7 @@ tokens: 65
 ```
 
 ## Contibuted modules
-**Extract and Combine JSON logs to CSV**
+**Extract and Combine Statistics from JSON logs to CSV**
 
 The `combine_logs` CLI can be used to load and combine the logs from multiple runs into a single CSV, ready for comparison and analysis. This tool extracts:
 * The arguments that were used to initiate the benchmarking run
@@ -155,11 +155,26 @@ $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recurs
 
 # Extract aggregate AND individual call stats that were logged when the duration/requests limit was reached
 $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
-    --stat-extraction-point draining --include-raw-request-info true
+    --stat-extraction-point draining --include-raw-request-info
 
 # Extract the very last line of logs, after the very last request has finished
 $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recursive \
     --stat-extraction-point final
+```
+
+**Extract Raw Call Data from a Combined Logs CSV**
+
+Once the `combine_logs` CLI has been run, the `extract_raw_samples` CLI can be used to extract all individual call data from each separate run. This is useful for digging deeper into the data for each invidual benchmark run, enabling you to include or exclude individual calls prior to analysis, create custom aggregations, or for inspecting the call history or request & response content of individual requests.
+
+Additionally, the `--exclude-failed-requests` arg will drop any call records that were unsucessful (request code != 200, or where no tokens were generated).
+```
+# Extract individual call samples from a combined logs CSV
+$ python -m benchmark.contrib.extract_raw_samples logs/combined_logs.csv \
+    logs/raw_request_samples.csv
+
+# Extract individual call samples, excluding unsuccessful requests from the result
+$ python -m benchmark.contrib.extract_raw_samples logs/combined_logs.csv \
+    logs/raw_request_samples.csv --exclude-failed-requests
 ```
 
 **Run Batches of Multiple Configurations**

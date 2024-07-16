@@ -1,6 +1,18 @@
+import argparse
 import json
+import logging
+import os
+import warnings
 
 import pandas as pd
+
+warnings.filterwarnings("ignore", category=FutureWarning) # ignore Pandas warning of DF concat of NA columns
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-8s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 
 
 def _extract_raw_samples_from_row(row: pd.Series) -> pd.DataFrame:
@@ -117,3 +129,39 @@ def get_extracted_raw_samples_df(
     if drop_failed_requests:
         raw_samples_df = raw_samples_df[raw_samples_df["request_success"]]
     return raw_samples_df
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="CLI for extracting raw request info from a combined_logs CSV."
+    )
+    parser.add_argument(
+        "combined_logs_csv_path", type=str, help="Path of the combined_logs CSV."
+    )
+    parser.add_argument("save_path", type=str, help="Path to save the output CSV.")
+    parser.add_argument(
+        "--exclude-failed-requests",
+        action="store_true",
+        help="If True, requests that did not complete successfully will be excluded.",
+    )
+
+    args = parser.parse_args()
+    if not args.combined_logs_csv_path.endswith(".csv"):
+        raise ValueError("combined_logs_csv_path must be a CSV file.")
+    if not args.save_path.endswith(".csv"):
+        raise ValueError("save_path must end in .csv.")
+    combined_logs_df = pd.read_csv(args.combined_logs_csv_path)
+    if len(combined_logs_df) == 0:
+        raise ValueError("No data found in combined_logs CSV.")
+    raw_samples_df = get_extracted_raw_samples_df(
+        combined_logs_df, args.exclude_failed_requests
+    )
+    if len(raw_samples_df) == 0:
+        raise ValueError("No valid raw samples exist after processing.")
+    os.makedirs(os.path.dirname(args.save_path), exist_ok=True)
+    raw_samples_df.to_csv(args.save_path, index=False)
+    logging.info(f"{len(raw_samples_df)} raw call samples from {len(combined_logs_df)} benchmark runs extracted to {args.save_path}")
+
+
+if __name__ == "__main__":
+    main()
