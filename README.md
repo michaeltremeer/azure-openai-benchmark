@@ -166,7 +166,7 @@ $ python -m benchmark.contrib.combine_logs logs/ combined_logs.csv --load-recurs
 
 Once the `combine_logs` CLI has been run, the `extract_raw_samples` CLI can be used to extract all individual call data from each separate run. This is useful for digging deeper into the data for each invidual benchmark run, enabling you to include or exclude individual calls prior to analysis, create custom aggregations, or for inspecting the call history or request & response content of individual requests.
 
-Additionally, the `--exclude-failed-requests` arg will drop any call records that were unsucessful (request code != 200, or where no tokens were generated).
+Additionally, the `--exclude-failed-requests` arg will drop any call records that were unsucessful (where request code != 200, or where no tokens were generated).
 ```
 # Extract individual call samples from a combined logs CSV
 $ python -m benchmark.contrib.extract_raw_samples logs/combined_logs.csv \
