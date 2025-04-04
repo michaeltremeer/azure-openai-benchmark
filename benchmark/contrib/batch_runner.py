@@ -1,5 +1,5 @@
 """
-This module can be used to run multiple runs of the benchmarking script with different permutations of parameters. 
+This module can be used to run multiple runs of the benchmarking script with different permutations of parameters.
 Since this can be run at the command line, it also allows the running of testing across multiple deployments at the same time.
 
 To use:
@@ -19,14 +19,11 @@ To use:
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import time
 from typing import Iterable, Optional, Union
-
-from requests import post
-
-from ..oairequester import TELEMETRY_USER_AGENT_HEADER, USER_AGENT, UTILIZATION_HEADER
 
 
 def str2bool(v):
@@ -92,12 +89,12 @@ def parse_args():
         help="Number of clients to use for each run. Defaults to 20.",
     )
     parser.add_argument(
-        "--start-ptum-runs-at-full-utilization",
+        "--run-warmup-load-until-429-occurs",
         type=str2bool,
         nargs="?",
         help="Starts all PTU-M runs at 100% utilization, preventing any burst capacity from inflating the results. Defaults to True.",
         const=True,
-        default=True,
+        default=False,
     )
     parser.add_argument(
         "--log-save-dir",
@@ -113,12 +110,12 @@ def parse_args():
         default=False,
     )
     parser.add_argument(
-        "--adjust-for-network-latency", 
-        type=str2bool, 
-        nargs='?', 
-        help="If True, will subtract base network delay from all latency measurements (based on ping). Only use this when trying to simulate the results as if the test machine was in the same data centre as the endpoint. Defaults to False.", 
-        const=True, 
-        default=False
+        "--adjust-for-network-latency",
+        type=str2bool,
+        nargs="?",
+        help="If True, will subtract base network delay from all latency measurements (based on ping). Only use this when trying to simulate the results as if the test machine was in the same data centre as the endpoint. Defaults to False.",
+        const=True,
+        default=False,
     )
     parser.add_argument(
         "--retry",
@@ -243,7 +240,7 @@ def run_benchmark_exec_str(
     :param print_terminal_output: If True, the terminal output will be printed to the console.
     :param exec_str: Terminal command to be executed.
     :param kill_when_draining_begins: If True, the run will be killed as soon as requests start to drain. This prevents PTU utilization dropping as the last requests finish.
-    :param kill_at_100_util: If True and the endpoint is a PTU-M model deployment, the run will be killed as soon as utilization 95th is above 98%. This ensures the endpoint has no 'burst credits' prior to the next run.
+    :param kill_at_100_util: If True and the endpoint is a PTU-M model deployment, the run will be killed as soon as utilization 95th is above 98% or when requests start getting throttled (and 429s start getting returned). This ensures the endpoint has no 'burst credits' prior to the next run.
     """
     process = subprocess.Popen(
         shlex.split(exec_str), stdout=subprocess.PIPE, stderr=subprocess.STDOUT
@@ -258,20 +255,33 @@ def run_benchmark_exec_str(
             if nextline:
                 if print_terminal_output:
                     print(nextline.strip())
-                # Kill process if utilization exceeds 98%
-                if kill_at_100_util and '"util":' in nextline:
-                    # Load utilization - should be last subdict in the output - should be one of either:
-                    # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
-                    # PTU and first response has been received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
-                    util_dict = json.loads(nextline.split('"util": ')[1][:-2])
-                    last_util_95th = util_dict["95th"]
-                    if last_util_95th != "n/a":
-                        last_util_95th = float(last_util_95th[:-1])
-                        if last_util_95th > 98:
-                            print(
-                                "PTU-M utilization exceeded 98% - terminating warmup run process"
-                            )
-                            process.kill()
+                # Kill process if utilization exceeds 98% OR if 429s have started occurring
+                if kill_at_100_util:
+                    if '"util":' in nextline:
+                        # Load utilization - should be last subdict in the output - should be one of either:
+                        # PayGO or no responses received yet: "{..., "util": {"avg": "n/a", "95th": "n/a"}}"
+                        # PTU and first response has been received: "{..., "util": {"avg": "74.2%", "95th": "78.5%"}}"
+                        util_dict = json.loads(nextline.split('"util": ')[1][:-2])
+                        last_util_95th = util_dict["95th"]
+                        if last_util_95th != "n/a":
+                            last_util_95th = float(last_util_95th[:-1])
+                            if last_util_95th > 98:
+                                print(
+                                    "PTU-M utilization exceeded 98% - terminating warmup run process"
+                                )
+                                process.kill()
+                    if "throttled" in nextline:
+                        # Use regex to get the count of throttled requests
+                        # Search for the string ', "throttled": 0, ' in the line using regex
+                        throttled_match = re.search(r'"throttled": (\d+)', nextline)
+                        if throttled_match:
+                            # Extract the number of throttled requests
+                            num_throttled = int(throttled_match.group(1))
+                            if num_throttled > 0:
+                                print(
+                                    "Throttled requests detected, PTU has reached 100% util. Terminating warmup run process."
+                                )
+                                process.kill()
                 # Kill process if run draining has occurred. Make sure to kill process after one more line of stats has been logged.
                 if kill_when_draining_begins and draining_started:
                     print(
@@ -304,7 +314,7 @@ def run_benchmark_batch(
     log_save_dir: str,
     log_request_content: Optional[bool],
     prevent_server_caching: bool,
-    start_ptum_runs_at_full_utilization: bool,
+    run_warmup_load_until_429_occurs: bool,
     retry: str,
     frequency_penalty: Optional[float],
     presence_penalty: Optional[float],
@@ -328,7 +338,7 @@ def run_benchmark_batch(
     :param log_save_dir: Will save all logs to this directory.
     :param log_request_content: If True, will log the raw input and output content of every request.
     :param prevent_server_caching: Whether to prevent server caching in each test.
-    :param start_ptum_runs_at_full_utilization: For PTU-M deployments, run a high load run through the endpoint prior to each and every benchmark run to ensure benchmnark runs start at 100% utilization (avoiding the effect of burst capacity influencing the results).
+    :param run_warmup_load_until_429_occurs: Runs a high load run through the endpoint prior to each and every benchmark run to ensure that each benchmark runs starts at PTU-M 100% utilization (avoiding the effect of burst capacity influencing the results). Make sure this is only enabled when testing PTU endpoints, otherwise the warmup run may never end.
     :param retry: Request retry strategy.
     :param frequency_penalty: Request frequency_penalty.
     :param presence_penalty: Request presence_penalty.
@@ -337,54 +347,18 @@ def run_benchmark_batch(
     :param api_key_env: Environment variable that contains the API KEY.
     :param api_version: API version to use. Defaults to '2023-05-15'.
     """
-    is_ptu_deployment = False
-    if start_ptum_runs_at_full_utilization and "openai.com" in api_base_endpoint:
-        print(
-            "Endpoint is an OpenAI.com deployment - No warmup of the endpoint will be completed."
-        )
-        start_ptum_runs_at_full_utilization = False
-    if start_ptum_runs_at_full_utilization:
-        print("Checking whether endpoint is PTU-M deployment...")
-        # Send a test request to check whether the endpoint returns a utilization header
-        api_key = os.getenv(api_key_env)
-        url = (
-            api_base_endpoint
-            + "/openai/deployments/"
-            + deployment
-            + "/chat/completions"
-        )
-        url += "?api-version=" + api_version
-        util_check_headers = {
-            "api-key": api_key,
-            "Content-Type": "application/json",
-            TELEMETRY_USER_AGENT_HEADER: USER_AGENT,
-        }
-        util_check_body = {
-            "messages": [{"content": "What is 1+1?", "role": "user"}],
-        }
-        response = post(url, headers=util_check_headers, json=util_check_body)
-        if response.status_code != 200:
-            raise ValueError(
-                f"Deployment type check failed with code {response.status_code}. Reason: {response.reason}. Data: {response.text}"
-            )
-        if UTILIZATION_HEADER in response.headers:
-            print(
-                "Utilization header found in endpoint response. This is a PTU-M deployment and will be warmed up prior to each benchmark run."
-            )
-            is_ptu_deployment = True
-        else:
-            print(
-                "Utilization header not found in endpoint response. This is not a PTU-M deployment - no endpoint warmup is necessary."
-            )
-            is_ptu_deployment = False
 
-    # Run the actual tests
+    # Run the warmup run
     for run_num, (context_input_arg, max_tokens, rate) in enumerate(
         token_rate_workload_list
     ):
-        if start_ptum_runs_at_full_utilization and is_ptu_deployment:
+        if run_warmup_load_until_429_occurs:
             print(
-                "Running high load through PTU-M endpoint to push utilization to 100%..."
+                (
+                    "Running high load through PTU-M endpoint to push utilization to 100%. WARNING: If this is not a "
+                    "PTU-M endpoint, this warmup run will never end. Press Ctrl+C to kill the process and restart the batch with "
+                    "the 'run-warmup-load-until-429-occurs' argument set to False to skip warmup runs in future."
+                )
             )
             # Run high load until the PTU-M deployment is at 100% util, then kill the run
             ptu_exec_str = benchmark_args_to_exec_str(
@@ -394,7 +368,7 @@ def run_benchmark_batch(
                 context_tokens=500,
                 max_tokens=100,
                 rate=None,
-                log_save_dir=None,
+                log_save_dir=log_save_dir,
                 log_request_content=False,
                 aggregation_window=60,
                 duration=None,
@@ -539,7 +513,7 @@ def main():
                 log_request_content=args.log_request_content,
                 adjust_for_network_latency=args.adjust_for_network_latency,
                 prevent_server_caching=args.prevent_server_caching,
-                start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
+                run_warmup_load_until_429_occurs=args.run_warmup_load_until_429_occurs,
                 frequency_penalty=args.frequency_penalty,
                 presence_penalty=args.presence_penalty,
                 temperature=args.temperature,
@@ -578,7 +552,7 @@ def main():
                     log_request_content=args.log_request_content,
                     adjust_for_network_latency=args.adjust_for_network_latency,
                     prevent_server_caching=args.prevent_server_caching,
-                    start_ptum_runs_at_full_utilization=args.start_ptum_runs_at_full_utilization,
+                    run_warmup_load_until_429_occurs=args.run_warmup_load_until_429_occurs,
                     frequency_penalty=args.frequency_penalty,
                     presence_penalty=args.presence_penalty,
                     temperature=args.temperature,
