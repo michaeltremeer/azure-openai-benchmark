@@ -134,6 +134,7 @@ def load(args):
         rate_limiter = RateLimiter(args.rate, 60)
 
     # Check model name in order to correctly estimate tokens
+    logging.info("checking model type...")
     if is_openai_com_endpoint:
         model = args.deployment
     else:
@@ -142,14 +143,21 @@ def load(args):
             "Content-Type": "application/json",
         }
         model_check_body = {"messages": [{"content": "What is 1+1?", "role": "user"}]}
-        response = requests.post(
-            url, headers=model_check_headers, json=model_check_body
-        )
-        if response.status_code != 200:
-            raise ValueError(
-                f"Deployment check failed with status code {response.status_code}. Reason: {response.reason}. Data: {response.text}"
+        # Check for model type. If a 429 is returned (due to the endpoint being busy), wait and try again.
+        model = None
+        while not model:
+            response = requests.post(
+                url, headers=model_check_headers, json=model_check_body
             )
-        model = response.json()["model"]
+            if response.status_code == 429:
+                # Request returned a 429 (endpoint is at full utilization). Sleep and try again to get a valid response
+                time.sleep(0.3)
+            elif response.status_code not in [200, 429]:
+                raise ValueError(
+                    f"Deployment check failed with status code {response.status_code}. Reason: {response.reason}. Data: {response.text}"
+                )
+            else:
+                model = response.json()["model"]
     logging.info(f"model detected: {model}")
 
     if args.adjust_for_network_latency:
@@ -243,7 +251,7 @@ def _run_load(
     run_end_condition_mode="or",
     json_output=False,
     log_request_content=False,
-    network_latency_adjustment=0
+    network_latency_adjustment=0,
 ):
     aggregator = _StatsAggregator(
         window_duration=aggregation_duration,
