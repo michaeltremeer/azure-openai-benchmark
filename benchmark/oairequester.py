@@ -2,11 +2,11 @@
 # Licensed under the MIT License.
 
 import asyncio
+import json
 import logging
 import time
-from typing import Optional
-import json
 import traceback
+from typing import Optional
 
 import aiohttp
 import backoff
@@ -140,7 +140,7 @@ class OAIRequester:
         if response.status != 200:
             stats.response_end_time = time.time()
         if response.status != 200 and response.status != 429:
-            logging.warning(f"call failed: {REQUEST_ID_HEADER}={response.headers[REQUEST_ID_HEADER]} {response.status}: {response.reason}")
+            logging.warning(f"call failed: {REQUEST_ID_HEADER}={response.headers.get(REQUEST_ID_HEADER, None)} {response.status}: {response.reason}")
         if self.backoff:
             response.raise_for_status()
         if response.status == 200:
